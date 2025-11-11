@@ -1,0 +1,413 @@
+import React from "react";
+import {
+  LayoutDashboard,
+  Calendar,
+  Wallet,
+  Building2,
+  UserPlus,
+  FileText,
+  MessageSquare,
+  LogOut,
+  PlusCircle,
+  UserCog,
+  Inbox,
+  Users,
+  ClipboardList,
+  Menu,
+} from "lucide-react";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarHeader,
+  SidebarFooter,
+  useSidebar,
+} from "./ui/sidebar";
+import { Avatar, AvatarFallback, AvatarImage, getDiceBearAvatar } from "./ui/avatar";
+import { Button } from "./ui/button";
+import { Separator } from "./ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { Sheet, SheetContent } from "./ui/sheet";
+import { useIsMobile } from "./ui/use-mobile";
+import type { User } from "../App";
+
+interface AppSidebarProps {
+  currentView: string;
+  onViewChange: (view: string) => void;
+  user: User;
+  onLogout: () => void;
+}
+
+const getMenuItemsForRole = (role: string) => {
+  const commonItems = [
+    {
+      id: "dashboard",
+      title: "Dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      id: "calendar",
+      title: "Calendar",
+      icon: Calendar,
+    },
+  ];
+
+  if (role === "member") {
+    return [
+      ...commonItems,
+      {
+        id: "clubs",
+        title: "Join Clubs",
+        icon: UserPlus,
+      },
+      {
+        id: "feedback",
+        title: "Feedback",
+        icon: MessageSquare,
+      },
+    ];
+  }
+
+  if (role === "leader") {
+    return [
+      ...commonItems,
+      {
+        id: "clubs",
+        title: "Club Management",
+        icon: Building2,
+      },
+      {
+        id: "budget",
+        title: "Smart document",
+        icon: Wallet,
+      },
+      {
+        id: "assignments",
+        title: "My Assignments",
+        icon: ClipboardList,
+      },
+      {
+        id: "report-inbox",
+        title: "Report Inbox",
+        icon: Inbox,
+      },
+      {
+        id: "report",
+        title: "Report",
+        icon: FileText,
+      },
+    ];
+  }
+
+  if (role === "admin") {
+    return [
+      {
+        id: "create-clubs",
+        title: "Create Clubs",
+        icon: PlusCircle,
+      },
+      {
+        id: "manage-owners",
+        title: "Manage Club",
+        icon: UserCog,
+      },
+      {
+        id: "report-inbox",
+        title: "Report Inbox",
+        icon: Inbox,
+      },
+      {
+        id: "user-oversight",
+        title: "Leader & User Oversight",
+        icon: Users,
+      },
+      {
+        id: "assignments",
+        title: "Assignment Center",
+        icon: ClipboardList,
+      },
+    ];
+  }
+
+  return commonItems;
+};
+
+export function AppSidebar({ currentView, onViewChange, user, onLogout }: AppSidebarProps) {
+  const isMobile = useIsMobile();
+  const { openMobile, setOpenMobile } = useSidebar();
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case "admin":
+        return "Super Admin";
+      case "leader":
+        return "Club Leader";
+      case "member":
+        return "Member";
+      default:
+        return "User";
+    }
+  };
+
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case "admin":
+        return "bg-purple-100 text-purple-700";
+      case "leader":
+        return "bg-green-100 text-green-700";
+      case "member":
+        return "bg-blue-100 text-blue-700";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
+
+  const menuItems = getMenuItemsForRole(user.role);
+
+  const handleIconClick = (itemId: string) => {
+    onViewChange(itemId);
+    // Don't open expanded sidebar, just change view
+  };
+
+  // Mobile icon-only sidebar (always visible)
+  if (isMobile) {
+    return (
+      <>
+        {/* Icon-only sidebar - always visible on mobile */}
+        <div className="fixed left-0 top-0 bottom-0 w-12 md:hidden bg-sidebar border-r border-sidebar-border z-20 flex flex-col">
+          {/* Logo icon */}
+          <div className="p-2 border-b border-sidebar-border flex items-center justify-center">
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setOpenMobile(true)}
+                    className="w-full flex items-center justify-center hover:bg-sidebar-accent rounded transition-colors"
+                  >
+                    <img 
+                      src="/logo/logobg.webp" 
+                      alt="iCAS-CMU HUB" 
+                      className="h-8 w-8 object-contain"
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Open Menu</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          {/* Expand/Menu button */}
+          <div className="px-2 pb-2 border-b border-sidebar-border">
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setOpenMobile(true)}
+                    className="w-full p-2 flex items-center justify-center hover:bg-sidebar-accent rounded transition-colors"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Expand Menu</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          {/* Navigation icons */}
+          <div className="flex-1 overflow-y-auto py-2">
+            <TooltipProvider delayDuration={0}>
+              {menuItems.map((item) => (
+                <Tooltip key={item.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => handleIconClick(item.id)}
+                      className={`w-full p-3 flex items-center justify-center transition-colors ${
+                        currentView === item.id
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      }`}
+                    >
+                      <item.icon className="h-5 w-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>{item.title}</p>
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </TooltipProvider>
+          </div>
+
+          {/* User avatar icon */}
+          <div className="p-2 border-t border-sidebar-border">
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setOpenMobile(true)}
+                    className="w-full flex items-center justify-center"
+                  >
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={user.avatar || getDiceBearAvatar(user.name)} />
+                      <AvatarFallback className="text-xs">{user.name.substring(0, 2)}</AvatarFallback>
+                    </Avatar>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>{user.name}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
+
+        {/* Full sidebar overlay (expanded on icon click) */}
+        <Sheet open={openMobile} onOpenChange={setOpenMobile}>
+          <SheetContent side="left" className="w-[18rem] p-0 bg-sidebar text-sidebar-foreground">
+            <div className="flex h-full w-full flex-col">
+              <SidebarHeader className="border-b p-4">
+                <div className="space-y-2">
+                  <div className="flex justify-center">
+                    <img 
+                      src="/logo/logobg.webp" 
+                      alt="iCAS-CMU HUB" 
+                      className="h-12 w-auto object-contain"
+                    />
+                  </div>
+                </div>
+              </SidebarHeader>
+              <SidebarContent>
+                <SidebarGroup>
+                  <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {menuItems.map((item) => (
+                        <SidebarMenuItem key={item.id}>
+                          <SidebarMenuButton
+                            onClick={() => {
+                              onViewChange(item.id);
+                              setOpenMobile(false);
+                            }}
+                            isActive={currentView === item.id}
+                          >
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </SidebarContent>
+              <SidebarFooter className="border-t p-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  <Avatar>
+                    <AvatarImage src={user.avatar || getDiceBearAvatar(user.name)} />
+                    <AvatarFallback>{user.name.substring(0, 2)}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{user.name}</p>
+                    <div className={`inline-block px-2 py-0.5 rounded text-xs mt-1 ${getRoleBadgeColor(user.role)}`}>
+                      {getRoleLabel(user.role)}
+                    </div>
+                    {user.clubName && (
+                      <p className="text-xs text-muted-foreground truncate mt-1">
+                        {user.clubName}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <Separator />
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    onLogout();
+                    setOpenMobile(false);
+                  }}
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </SidebarFooter>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </>
+    );
+  }
+
+  // Desktop sidebar (full sidebar)
+  return (
+    <Sidebar>
+      <SidebarHeader className="border-b p-4">
+        <div className="space-y-2">
+          <div className="flex justify-center">
+            <img 
+              src="/logo/logobg.webp" 
+              alt="iCAS-CMU HUB" 
+              className="h-12 w-auto object-contain"
+            />
+          </div>
+        </div>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {menuItems.map((item) => (
+                <SidebarMenuItem key={item.id}>
+                  <SidebarMenuButton
+                    onClick={() => onViewChange(item.id)}
+                    isActive={currentView === item.id}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter className="border-t p-4 space-y-4">
+        <div className="flex items-center gap-3">
+          <Avatar>
+            <AvatarImage src={user.avatar || getDiceBearAvatar(user.name)} />
+            <AvatarFallback>{user.name.substring(0, 2)}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm truncate">{user.name}</p>
+            <div className={`inline-block px-2 py-0.5 rounded text-xs mt-1 ${getRoleBadgeColor(user.role)}`}>
+              {getRoleLabel(user.role)}
+            </div>
+            {user.clubName && (
+              <p className="text-xs text-muted-foreground truncate mt-1">
+                {user.clubName}
+              </p>
+            )}
+          </div>
+        </div>
+        <Separator />
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={onLogout}
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Sign Out
+        </Button>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}

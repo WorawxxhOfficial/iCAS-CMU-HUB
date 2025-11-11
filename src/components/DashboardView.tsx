@@ -1,0 +1,469 @@
+import React, { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { FileText, Users, Calendar, TrendingUp, Clock, CheckCircle2, AlertCircle, XCircle, MapPin, ClipboardList, ArrowRight } from "lucide-react";
+import { Progress } from "./ui/progress";
+import { Badge } from "./ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Label } from "./ui/label";
+import { Button } from "./ui/button";
+import type { User } from "../App";
+
+interface DashboardViewProps {
+  user: User;
+}
+
+interface Document {
+  id: number;
+  title: string;
+  type: "reimbursement" | "proposal";
+  status: "pending" | "approved" | "revision" | "rejected";
+  submittedBy: string;
+  date: string;
+  amount: string;
+  description: string;
+  attachments?: string[];
+}
+
+export function DashboardView({ user }: DashboardViewProps) {
+  // Different stats based on role
+  const getMemberStats = () => [
+    {
+      title: "ชมรมของคุณ",
+      value: user.clubId ? "1" : "1",
+      icon: Users,
+      description: user.clubName || "เข้าร่วมชมรม",
+      color: "text-blue-600",
+    },
+    {
+      title: "กิจกรรมที่เข้าร่วม",
+      value: "15/20",
+      icon: Calendar,
+      description: "อัตราการเข้าร่วม 75%",
+      color: "text-green-600",
+    },
+    {
+      title: "กิจกรรมที่กำลังจะมาถึง",
+      value: "3",
+      icon: Calendar,
+      description: "กิจกรรมถัดไปในอีก 2 วัน",
+      color: "text-purple-600",
+    },
+    {
+      title: "อัตราการใช้งานของคุณ",
+      value: "75%",
+      icon: TrendingUp,
+      description: "การมีส่วนร่วมดี",
+      color: "text-orange-600",
+    },
+  ];
+
+  const getLeaderStats = () => [
+    {
+      title: "โครงการที่ใช้งานอยู่",
+      value: "12",
+      icon: FileText,
+      description: "+2 จากเดือนที่แล้ว",
+      color: "text-blue-600",
+    },
+    {
+      title: "สมาชิกชมรม",
+      value: "48",
+      icon: Users,
+      description: "อัตราการใช้งาน 85%",
+      color: "text-green-600",
+    },
+    {
+      title: "งานมอบหมายของฉัน",
+      value: "3",
+      icon: ClipboardList,
+      description: "1 เกินกำหนด, 1 กำลังดำเนินการ",
+      color: "text-orange-600",
+    },
+  ];
+
+  const getAdminStats = () => [
+    {
+      title: "ชมรมทั้งหมด",
+      value: "8",
+      icon: Users,
+      description: "ทั้งหมดใช้งานอยู่",
+      color: "text-blue-600",
+    },
+    {
+      title: "สมาชิกทั้งหมด",
+      value: "378",
+      icon: Users,
+      description: "ทุกชมรม",
+      color: "text-green-600",
+    },
+    {
+      title: "กิจกรรมทั้งหมด",
+      value: "42",
+      icon: Calendar,
+      description: "ภาคการศึกษานี้",
+      color: "text-purple-600",
+    },
+  ];
+
+  const stats = user.role === "member" 
+    ? getMemberStats() 
+    : user.role === "leader" 
+    ? getLeaderStats() 
+    : getAdminStats();
+
+  const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
+
+  const recentDocuments: Document[] = [
+    {
+      id: 1,
+      title: "Annual Concert Proposal",
+      type: "proposal",
+      status: "pending",
+      submittedBy: "สมชาย ใจดี",
+      date: "2025-11-05",
+      amount: "฿15,000",
+      description: "ข้อเสนอสำหรับจัดคอนเสิร์ตประจำปี รวมค่าเช่าสถานที่ เครื่องเสียง และการตลาด",
+      attachments: ["proposal.pdf", "breakdown.xlsx"],
+    },
+    {
+      id: 2,
+      title: "Equipment Purchase Reimbursement",
+      type: "reimbursement",
+      status: "approved",
+      submittedBy: "สมหญิง รักดี",
+      date: "2025-11-03",
+      amount: "฿3,500",
+      description: "เบิกค่าซื้อไมโครโฟนและสายสัญญาณสำหรับการซ้อม",
+      attachments: ["receipt.jpg"],
+    },
+    {
+      id: 3,
+      title: "Workshop Activity Proposal",
+      type: "proposal",
+      status: "revision",
+      submittedBy: "ประภาส มั่นคง",
+      date: "2025-11-01",
+      amount: "฿8,000",
+      description: "โครงการเวิร์คช็อปสอนดนตรีให้น้องใหม่",
+      attachments: ["workshop-plan.pdf"],
+    },
+    {
+      id: 4,
+      title: "Monthly Meeting Expenses",
+      type: "reimbursement",
+      status: "approved",
+      submittedBy: "วิชัย สุขใจ",
+      date: "2025-10-30",
+      amount: "฿2,000",
+      description: "ค่าอาหารและเครื่องดื่มสำหรับประชุมประจำเดือน",
+      attachments: ["receipt-1.jpg", "receipt-2.jpg"],
+    },
+    {
+      id: 5,
+      title: "New Instrument Purchase Request",
+      type: "proposal",
+      status: "pending",
+      submittedBy: "สมชาย ใจดี",
+      date: "2025-10-28",
+      amount: "฿25,000",
+      description: "ขอซื้อกีตาร์ไฟฟ้าและแอมป์สำหรับการซ้อม",
+    },
+  ];
+
+  const getTypeBadge = (type: string) => {
+    switch (type) {
+      case "reimbursement":
+        return <Badge variant="outline">การเบิกจ่าย</Badge>;
+      case "proposal":
+        return <Badge variant="outline">ข้อเสนอ</Badge>;
+      default:
+        return <Badge variant="outline">{type}</Badge>;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "approved":
+        return (
+          <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+            <CheckCircle2 className="h-3 w-3 mr-1" />
+            อนุมัติแล้ว
+          </Badge>
+        );
+      case "pending":
+        return (
+          <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">
+            <Clock className="h-3 w-3 mr-1" />
+            รอดำเนินการ
+          </Badge>
+        );
+      case "revision":
+        return (
+          <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">
+            <AlertCircle className="h-3 w-3 mr-1" />
+            ต้องแก้ไข
+          </Badge>
+        );
+      case "rejected":
+        return (
+          <Badge className="bg-red-100 text-red-700 hover:bg-red-100">
+            <XCircle className="h-3 w-3 mr-1" />
+            ปฏิเสธ
+          </Badge>
+        );
+      default:
+        return <Badge>{status}</Badge>;
+    }
+  };
+
+  return (
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+      {/* Header */}
+      <div>
+        <h1 className="mb-2 text-xl md:text-2xl">Dashboard Overview</h1>
+        <p className="text-sm md:text-base text-muted-foreground">
+          ยินดีต้อนรับกลับ, {user.name}! {
+            user.role === "admin" 
+              ? "นี่คือภาพรวมของชมรมทั้งหมดในมหาวิทยาลัย"
+              : user.role === "leader"
+              ? `นี่คือสิ่งที่เกิดขึ้นกับ${user.clubName || "ชมรมของคุณ"}`
+              : "นี่คือสรุปกิจกรรมชมรมของคุณ"
+          }
+        </p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className={`grid gap-4 grid-cols-1 sm:grid-cols-2 ${user.role === "leader" ? "lg:grid-cols-3" : "lg:grid-cols-4"}`}>
+        {stats.map((stat) => (
+          <Card key={stat.title}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xs md:text-sm truncate pr-2">{stat.title}</CardTitle>
+              <stat.icon className={`h-4 w-4 ${stat.color} flex-shrink-0`} />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl md:text-2xl">{stat.value}</div>
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                {stat.description}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Member Activity - Only for leaders and admins */}
+      {(user.role === "leader" || user.role === "admin") && (
+        <div className="grid gap-6 lg:grid-cols-1">
+        {/* Member Activity */}
+        <Card>
+          <CardHeader>
+              <CardTitle>อัตราการใช้งานของสมาชิก</CardTitle>
+              <CardDescription>การมีส่วนร่วม 30 วันล่าสุด</CardDescription>
+          </CardHeader>
+          <CardContent>
+              <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <p className="text-xl sm:text-2xl">85%</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">อัตราการใช้งานเฉลี่ย</p>
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className="text-xl sm:text-2xl text-green-600">41</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">สมาชิกที่ใช้งาน</p>
+                </div>
+              </div>
+              <Progress value={85} className="h-2" />
+              <div className="pt-4 border-t space-y-2">
+                <div className="flex justify-between text-sm">
+                    <span>เข้าร่วมกิจกรรมทั้งหมด</span>
+                    <span className="text-green-600">28 คน</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span>เข้าร่วมกิจกรรม 50%+</span>
+                    <span className="text-blue-600">13 คน</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span>เข้าร่วมต่ำกว่า 50%</span>
+                    <span className="text-orange-600">7 คน</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Joined Clubs - Only for members */}
+      {user.role === "member" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>ชมรมที่เข้าร่วม</CardTitle>
+            <CardDescription>
+              ชมรมที่คุณได้รับการอนุมัติ
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              // Mock joined clubs data
+              const joinedClubs = [
+                {
+                  id: "club-1",
+                  name: "ชมรมดนตรีสากล",
+                  category: "Arts & Music",
+                  description: "ชมรมสำหรับผู้ที่สนใจดนตรีสากล ทั้งการเล่นเครื่องดนตรี ร้องเพลง และการแสดงบนเวที",
+                  memberCount: 48,
+                  president: "สมหญิง หัวหน้า",
+                  meetingDay: "Every Saturday",
+                  location: "Music Room 301",
+                  role: "member" as const,
+                  joinDate: "2025-10-15",
+                },
+              ];
+
+              return joinedClubs.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>คุณยังไม่ได้เข้าร่วมชมรมใดๆ</p>
+                  <p className="text-sm mt-1">ไปที่ "เข้าร่วมชมรม" เพื่อสำรวจชมรมที่มี</p>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {joinedClubs.map((club) => (
+                    <Card key={club.id} className="hover:shadow-md transition-shadow">
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <Avatar className="h-12 w-12">
+                            <AvatarImage src="invalid" />
+                            <AvatarFallback>
+                              {club.name.substring(4, 6)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            สมาชิก
+                          </Badge>
+                        </div>
+                        <CardTitle className="text-base mt-3">{club.name}</CardTitle>
+                        <CardDescription>
+                          <Badge variant="outline" className="text-xs">{club.category}</Badge>
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {club.description}
+                        </p>
+                        <div className="space-y-2 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-3 w-3" />
+                            <span>{club.memberCount} คน</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-3 w-3" />
+                            <span>{club.meetingDay}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-3 w-3" />
+                            <span>{club.location}</span>
+                          </div>
+                        </div>
+                        <div className="pt-4 border-t text-xs text-muted-foreground">
+                          เข้าร่วมเมื่อ: {new Date(club.joinDate).toLocaleDateString('th-TH')}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+            </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recent Documents - Only for leaders and admins */}
+      {(user.role === "leader" || user.role === "admin") && (
+        <>
+      <Card>
+        <CardHeader>
+              <CardTitle>การส่งเอกสารล่าสุด</CardTitle>
+          <CardDescription>
+                ข้อเสนอโครงการและคำขอเบิกจ่ายล่าสุด
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {recentDocuments.map((doc) => (
+              <div
+                key={doc.id}
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                onClick={() => setSelectedDoc(doc)}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="truncate font-medium">{doc.title}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                    By {doc.submittedBy} • {new Date(doc.date).toLocaleDateString('th-TH')}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 sm:ml-4 sm:flex-nowrap sm:flex-shrink-0">
+                  {getTypeBadge(doc.type)}
+                  <span className="text-sm font-medium whitespace-nowrap">{doc.amount}</span>
+                  {getStatusBadge(doc.status)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Document Detail Dialog */}
+      <Dialog open={!!selectedDoc} onOpenChange={() => setSelectedDoc(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {selectedDoc && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedDoc.title}</DialogTitle>
+                <DialogDescription>
+                      ส่งเมื่อ {new Date(selectedDoc.date).toLocaleDateString('th-TH')}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                    <div className="flex gap-2 flex-wrap">
+                      {getTypeBadge(selectedDoc.type)}
+                  {getStatusBadge(selectedDoc.status)}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                        <Label>จำนวนเงิน</Label>
+                    <p className="text-2xl mt-1">{selectedDoc.amount}</p>
+                  </div>
+                  <div>
+                        <Label>ส่งโดย</Label>
+                    <p className="mt-1">{selectedDoc.submittedBy}</p>
+                  </div>
+                </div>
+                <div>
+                      <Label>คำอธิบาย</Label>
+                  <p className="mt-2 text-sm text-muted-foreground">{selectedDoc.description}</p>
+                </div>
+                {selectedDoc.attachments && selectedDoc.attachments.length > 0 && (
+                  <div>
+                        <Label>ไฟล์แนบ</Label>
+                    <div className="mt-2 space-y-2">
+                      {selectedDoc.attachments.map((file, index) => (
+                        <div key={index} className="flex items-center gap-2 p-2 border rounded">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{file}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+        </>
+      )}
+    </div>
+  );
+}
