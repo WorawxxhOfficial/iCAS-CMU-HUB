@@ -1,15 +1,16 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { Request, Response } from 'express';
 import { AuthRequest } from '../features/auth/middleware/authMiddleware';
 
 // Helper to get user identifier for rate limiting
 const getIdentifier = (req: Request): string => {
   const authReq = req as AuthRequest;
-  // Use user ID if authenticated, otherwise use IP
+  // Use user ID if authenticated, otherwise use IP with proper IPv6 handling
   if (authReq.user?.userId) {
     return `user:${authReq.user.userId}`;
   }
-  return `ip:${req.ip || req.socket.remoteAddress || 'unknown'}`;
+  // Use ipKeyGenerator helper for proper IPv6 support
+  return ipKeyGenerator(req);
 };
 
 // General API rate limiter

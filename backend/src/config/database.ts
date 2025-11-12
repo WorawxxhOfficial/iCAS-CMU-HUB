@@ -9,6 +9,10 @@ const pool = mysql.createPool({
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'icas_cmu_hub',
+  
+  // ✨ บรรทัดที่ต้องเพิ่ม ✨
+  authPlugin: 'mysql_native_password',
+
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -30,4 +34,3 @@ export const testConnection = async (): Promise<boolean> => {
 };
 
 export default pool;
-

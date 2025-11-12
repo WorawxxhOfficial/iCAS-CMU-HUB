@@ -39,18 +39,40 @@ The SQL file (`backend/database/icas_cmu_hub.sql`) is automatically executed whe
 
 **Option A: Run Everything Locally**
 
-1. **Database Setup (XAMPP MySQL)**
+1. **Database Setup**
+
+   **Option A1: XAMPP MySQL**
    - Start XAMPP and start MySQL service
    - Open phpMyAdmin: `http://localhost/phpmyadmin`
    - Create database: `icas_cmu_hub`
-   - Import schema: Copy and run `backend/database/icas_cmu_hub.sql` in phpMyAdmin SQL tab
+   - Import schema: Copy and run `icas_cmu_hub.sql` in phpMyAdmin SQL tab
+
+   **Option A2: Use Docker MySQL (Recommended)**
+   ```bash
+   # Start only MySQL container
+   docker-compose up -d mysql
+   
+   # Database will be available at localhost:3307
+   # User: root, Password: rootpassword
+   ```
 
 2. **Backend Setup**
+   
+   **Important:** If Docker backend is running, stop it first:
+   ```bash
+   docker-compose stop backend
+   ```
+   
+   Then start local backend:
    ```bash
    cd backend
    npm install
    
-   # Create .env file (see Environment Variables section)
+   # Create .env file
+   # Copy backend/.env.example to backend/.env and update values
+   # For XAMPP MySQL: DB_HOST=localhost, DB_PORT=3306, DB_PASSWORD=
+   # For Docker MySQL: DB_HOST=localhost, DB_PORT=3307, DB_PASSWORD=rootpassword
+   
    npm run dev
    ```
    Backend will run on `http://localhost:5000`
@@ -182,6 +204,8 @@ The Docker Compose setup uses environment variables defined in `docker-compose.y
 ### Local Development (.env files)
 
 **Backend** - Create `backend/.env`:
+
+**For XAMPP MySQL:**
 ```env
 PORT=5000
 NODE_ENV=development
@@ -192,6 +216,21 @@ DB_PASSWORD=
 DB_NAME=icas_cmu_hub
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 JWT_EXPIRES_IN=7d
+CORS_ORIGIN=http://localhost:3000
+```
+
+**For Docker MySQL (port 3307):**
+```env
+PORT=5000
+NODE_ENV=development
+DB_HOST=localhost
+DB_PORT=3307
+DB_USER=root
+DB_PASSWORD=rootpassword
+DB_NAME=icas_cmu_hub
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+JWT_EXPIRES_IN=7d
+CORS_ORIGIN=http://localhost:3000
 ```
 
 **Frontend** - Create `.env` in project root (optional):
@@ -199,7 +238,9 @@ JWT_EXPIRES_IN=7d
 VITE_API_URL=http://localhost:5000/api
 ```
 
-**Note:** For Docker backend, use `http://localhost:5002/api` instead.
+**Note:** 
+- Copy `backend/.env.example` to `backend/.env` and update values as needed
+- For Docker backend, use `http://localhost:5002/api` instead
 
 ## 🧪 Testing
 
@@ -271,7 +312,12 @@ npm run build    # Production build
 ### Troubleshooting
 
 **Port conflicts:**
-If ports 3001, 5002, or 3307 are already in use, update the port mappings in `docker-compose.yml`.
+- If port 5000 is already in use when running `npm run dev`, check if Docker backend is running:
+  ```bash
+  docker-compose ps
+  docker-compose stop backend  # Stop Docker backend
+  ```
+- If ports 3001, 5002, or 3307 are already in use, update the port mappings in `docker-compose.yml`.
 
 **Database not initializing:**
 If the SQL file doesn't run, remove the volume and restart:
@@ -282,4 +328,9 @@ docker-compose up -d
 
 **Frontend can't connect to backend:**
 Ensure the `VITE_API_URL` environment variable matches the backend port (5002 for Docker, 5000 for local).
+
+**EADDRINUSE error when running npm run dev:**
+This means port 5000 is already in use. Solutions:
+1. Stop Docker backend: `docker-compose stop backend`
+2. Or change port in `backend/.env`: `PORT=5001` (and update frontend `VITE_API_URL` accordingly)
 
