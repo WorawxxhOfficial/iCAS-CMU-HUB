@@ -6,150 +6,182 @@ A comprehensive club management system built with React, TypeScript, and Node.js
 
 ### Prerequisites
 
-- Node.js 20+
-- Docker & Docker Compose (สำหรับวิธี Docker)
+- Docker and Docker Compose
+- Node.js 20+ (for local development)
 - npm or yarn
 
----
+### Docker Setup (Recommended)
 
-## 📦 วิธีที่ 1: ใช้ Docker (แนะนำ)
-
-วิธีนี้จะรันทั้ง Database (MySQL) และ Backend ใน Docker โดยอัตโนมัติ
-
-### 1. เริ่มต้นด้วย Docker
+The easiest way to run the entire application is using Docker Compose, which sets up all services automatically:
 
 ```bash
-# Start ทั้ง MySQL และ Backend
+# Start all services (database, backend, frontend)
 docker-compose up -d
 
-# ตรวจสอบสถานะ
+# Check service status
 docker-compose ps
 
-# ดู logs
+# View logs
 docker-compose logs -f
 
-# ดู logs เฉพาะ MySQL
-docker-compose logs -f mysql
-
-# ดู logs เฉพาะ Backend
-docker-compose logs -f backend
+# Stop all services
+docker-compose down
 ```
 
-### 2. ตรวจสอบการทำงาน
+**Access Points:**
+- **Frontend**: http://localhost:3001
+- **Backend API**: http://localhost:5002/api
+- **Database**: localhost:3307 (user: `root`, password: `rootpassword`)
 
-- **Backend API**: `http://localhost:5000`
-- **Health Check**: `http://localhost:5000/api/health`
-- **MySQL Port**: `3307` (mapped จาก container port 3306)
+The SQL file (`backend/database/icas_cmu_hub.sql`) is automatically executed when the database container starts for the first time.
 
-### 3. Database Setup
+### Local Development Setup
 
-Database จะถูก initialize อัตโนมัติด้วยไฟล์ `icas_cmu_hub.sql` เมื่อ container เริ่มทำงานครั้งแรก
+**Option A: Run Everything Locally**
 
-**ข้อมูลการเชื่อมต่อ Database:**
-- Host: `localhost` (จาก host machine) หรือ `mysql` (จาก container อื่น)
-- Port: `3307` (จาก host machine) หรือ `3306` (จาก container อื่น)
-- User: `root`
-- Password: `rootpassword`
-- Database: `icas_cmu_hub`
+1. **Database Setup (XAMPP MySQL)**
+   - Start XAMPP and start MySQL service
+   - Open phpMyAdmin: `http://localhost/phpmyadmin`
+   - Create database: `icas_cmu_hub`
+   - Import schema: Copy and run `backend/database/icas_cmu_hub.sql` in phpMyAdmin SQL tab
 
-**Test Accounts (Password: `password123`):**
+2. **Backend Setup**
+   ```bash
+   cd backend
+   npm install
+   
+   # Create .env file (see Environment Variables section)
+   npm run dev
+   ```
+   Backend will run on `http://localhost:5000`
 
-**สำหรับทดสอบ Check-In:**
-- `leader@cmu.ac.th` - Leader role (ชมรมดนตรีสากล) - ใช้สร้าง QR Code และ Check-In
-- `member@cmu.ac.th` - Member role (ชมรมดนตรีสากล) - ใช้ Check-In
-- `member2@cmu.ac.th` - Member role (ชมรมดนตรีสากล) - ใช้ Check-In
-- `member3@cmu.ac.th` - Member role (ชมรมกีฬา) - ใช้ Check-In
+3. **Frontend Setup**
+   ```bash
+   # From project root
+   npm install
+   npm run dev
+   ```
+   Frontend will run on `http://localhost:3000` with hot-reload enabled.
 
-**Accounts อื่นๆ:**
-- `admin@cmu.ac.th` - Admin role
-- `leader2@cmu.ac.th` - Leader role (ชมรมกีฬา)
-- `leader3@cmu.ac.th` - Leader role (ชมรมศิลปะ)
-- `member4@cmu.ac.th` - Member role (ชมรมกีฬา)
-- `member5@cmu.ac.th` - Member role (ชมรมศิลปะ)
-
-### 4. Frontend Setup
+**Option B: Hybrid (Docker Database + Backend, Local Frontend)**
 
 ```bash
-# จาก project root
+# Start database and backend in Docker
+docker-compose up -d database backend
+
+# Run frontend locally for hot-reload
 npm install
 npm run dev
 ```
 
-Frontend จะรันที่ `http://localhost:3000` พร้อม hot-reload
+## 📁 Project Structure
 
-### 5. คำสั่ง Docker ที่ใช้บ่อย
+```
+├── backend/              # Node.js + Express + TypeScript API
+│   ├── src/
+│   │   ├── config/       # Database configuration
+│   │   ├── routes/       # API routes
+│   │   ├── controllers/ # Request handlers
+│   │   ├── models/       # Data models
+│   │   └── types/        # TypeScript types
+│   └── database/        # SQL schema files
+├── src/                  # React frontend
+│   ├── components/      # React components
+│   └── config/          # API configuration
+└── public/               # Static assets
+```
+
+## 🐳 Docker Details
+
+The Docker setup includes three services:
+- **Database**: MySQL 8.0 with automatic SQL initialization
+- **Backend**: Node.js API server (TypeScript + Express)
+- **Frontend**: React application served with nginx
+
+### Service Ports
+
+Due to potential port conflicts with local services, the Docker services use alternative ports:
+- **Frontend**: Port `3001` (mapped from container port 80)
+- **Backend**: Port `5002` (mapped from container port 5000)
+- **Database**: Port `3307` (mapped from container port 3306)
+
+### Database Management
+
+The SQL file (`backend/database/icas_cmu_hub.sql`) is automatically executed when the database container starts for the first time. The database is stored in a Docker volume (`mysql_data`), so data persists between container restarts.
+
+**To reset the database and re-run the SQL file:**
 
 ```bash
-# หยุด services
-docker-compose stop
-
-# เริ่ม services อีกครั้ง
-docker-compose start
-
-# หยุดและลบ containers
+# Stop services and remove database volume
 docker-compose down
+docker volume rm icas-cmu-hub_mysql_data
 
-# หยุดและลบ containers + volumes (ลบข้อมูล database)
-docker-compose down -v
+# Start services (SQL will run automatically on first startup)
+docker-compose up -d
+```
 
-# Rebuild containers หลังจากแก้ไข Dockerfile
+**To access the database directly:**
+
+```bash
+# Connect to MySQL container
+docker exec -it icas-database mysql -uroot -prootpassword icas_cmu_hub
+
+# Or from host machine
+mysql -h 127.0.0.1 -P 3307 -u root -prootpassword icas_cmu_hub
+```
+
+### Useful Docker Commands
+
+```bash
+# View all service logs
+docker-compose logs -f
+
+# View specific service logs
+docker-compose logs -f database
+docker-compose logs -f backend
+docker-compose logs -f frontend
+
+# Restart a specific service
+docker-compose restart backend
+
+# Rebuild and restart services
 docker-compose up -d --build
 
-# Restart service เฉพาะ
-docker-compose restart backend
-docker-compose restart mysql
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes (will delete database data)
+docker-compose down -v
 ```
-
-### 6. การแก้ปัญหา Port 3306 ถูกใช้งานอยู่
-
-หากพบ error `bind: Only one usage of each socket address (protocol/network address/port) is normally permitted`:
-
-1. **วิธีที่ 1**: ปิด MySQL service ที่รันอยู่บนเครื่อง (เช่น XAMPP, MySQL Service)
-2. **วิธีที่ 2**: เปลี่ยน port ใน `docker-compose.yml` จาก `3307:3306` เป็น port อื่น เช่น `3308:3306`
-
----
-
-## 💻 วิธีที่ 2: ใช้ npm (Development)
-
-วิธีนี้เหมาะสำหรับการพัฒนา โดยรัน Backend และ Frontend ด้วย npm และใช้ Database แบบเดิม (XAMPP/phpMyAdmin)
-
-### 1. Database Setup (XAMPP MySQL)
-
-1. เริ่ม XAMPP และ start MySQL service
-2. เปิด phpMyAdmin: `http://localhost/phpmyadmin`
-3. สร้าง database: `icas_cmu_hub`
-4. Import schema: เปิดไฟล์ `icas_cmu_hub.sql` ใน phpMyAdmin SQL tab และรัน
-
-### 2. Backend Setup
-
-```bash
-cd backend
-npm install
-
-# สร้างไฟล์ .env (ดู Environment Variables section)
-npm run dev
-```
-
-Backend จะรันที่ `http://localhost:5000`
-
-### 3. Frontend Setup
-
-```bash
-# จาก project root
-npm install
-npm run dev
-```
-
-Frontend จะรันที่ `http://localhost:3000` พร้อม hot-reload
-
----
 
 ## 🔧 Environment Variables
 
-### Backend (.env) - สำหรับวิธี npm
+### Docker Environment Variables
 
-สร้างไฟล์ `backend/.env`:
+The Docker Compose setup uses environment variables defined in `docker-compose.yml`. Key variables:
 
+**Database:**
+- `MYSQL_ROOT_PASSWORD=rootpassword`
+- `MYSQL_DATABASE=icas_cmu_hub`
+- `MYSQL_USER=icas_user`
+- `MYSQL_PASSWORD=icas_password`
+
+**Backend:**
+- `DB_HOST=database` (service name for Docker networking)
+- `DB_PORT=3306`
+- `DB_USER=root`
+- `DB_PASSWORD=rootpassword`
+- `DB_NAME=icas_cmu_hub`
+- `JWT_SECRET=your-secret-key-change-in-production`
+- `JWT_EXPIRES_IN=7d`
+- `CORS_ORIGIN=http://localhost:3000`
+
+**Frontend:**
+- `VITE_API_URL=http://localhost:5000/api` (Note: Update to `http://localhost:5002/api` if using Docker backend)
+
+### Local Development (.env files)
+
+**Backend** - Create `backend/.env`:
 ```env
 PORT=5000
 NODE_ENV=development
@@ -162,69 +194,38 @@ JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 JWT_EXPIRES_IN=7d
 ```
 
-**หมายเหตุ**: 
-- สำหรับ Docker: Environment variables ถูกตั้งค่าใน `docker-compose.yml` แล้ว
-- สำหรับ npm: ต้องสร้างไฟล์ `.env` ในโฟลเดอร์ `backend/`
-
-### Frontend (.env) - Optional
-
-สร้างไฟล์ `.env` ใน project root (ถ้า API URL แตกต่าง):
-
+**Frontend** - Create `.env` in project root (optional):
 ```env
 VITE_API_URL=http://localhost:5000/api
 ```
 
----
+**Note:** For Docker backend, use `http://localhost:5002/api` instead.
 
-## 📁 Project Structure
+## 🧪 Testing
 
-```
-├── backend/              # Node.js + Express + TypeScript API
-│   ├── src/
-│   │   ├── config/       # Database configuration
-│   │   ├── routes/       # API routes
-│   │   ├── controllers/  # Request handlers
-│   │   ├── features/     # Feature modules
-│   │   └── types/        # TypeScript types
-│   └── Dockerfile        # Docker configuration
-├── src/                  # React frontend
-│   ├── components/       # React components
-│   └── config/           # API configuration
-├── docker-compose.yml    # Docker Compose configuration
-├── icas_cmu_hub.sql     # Database schema and initial data
-└── public/               # Static assets
-```
+### Test Database Connection
 
----
-
-## 🧪 Testing Database Connection
-
-### วิธี Docker
-
+**With Docker:**
 ```bash
-# ตรวจสอบ health endpoint
-curl http://localhost:5000/api/health
+# Check backend health endpoint
+curl http://localhost:5002/api/health
 
-# หรือเปิดใน browser
-# http://localhost:5000/api/health
+# Or test database connection directly
+docker exec -it icas-database mysql -uroot -prootpassword -e "USE icas_cmu_hub; SHOW TABLES;"
 ```
 
-### วิธี npm
-
+**Local Development:**
 ```bash
 cd backend
 npm run dev
-# ตรวจสอบ http://localhost:5000/api/health
+# Check http://localhost:5000/api/health
 ```
 
-หรือทดสอบโดยตรง:
-
+Or test directly:
 ```bash
 cd backend
 npx tsx src/scripts/test-connection.ts
 ```
-
----
 
 ## 📚 API Endpoints
 
@@ -236,12 +237,9 @@ npx tsx src/scripts/test-connection.ts
 ### Health
 - `GET /api/health` - Health check and database connection status
 
----
-
 ## 🛠️ Development
 
 ### Backend
-
 ```bash
 cd backend
 npm run dev      # Development with hot-reload
@@ -251,82 +249,37 @@ npm run type-check  # TypeScript type checking
 ```
 
 ### Frontend
-
 ```bash
 npm run dev      # Development server
 npm run build    # Production build
 ```
 
----
-
-## 🐳 Docker Services
-
-### Development Mode (แนะนำ)
-
-**Setup:**
-- **MySQL**: รันใน Docker (auto-initialize ด้วย SQL file)
-- **Backend**: รันใน Docker (auto-restart)
-- **Frontend**: รัน local ด้วย `npm run dev` (สำหรับ hot-reload)
-
-```bash
-# Start MySQL และ Backend
-docker-compose up -d
-
-# Frontend รันแยก
-npm run dev
-```
-
-- Frontend: `http://localhost:3000` (local dev server with hot-reload)
-- Backend API: `http://localhost:5000` (Docker container)
-- MySQL: `localhost:3307` (จาก host machine)
-
-### Production
-
-```bash
-docker-compose up -d
-```
-
-**หมายเหตุ**: Frontend service ถูก comment ไว้ใน `docker-compose.yml` 
-หากต้องการรัน frontend ใน Docker ด้วย ให้ uncomment frontend service
-
----
-
 ## 📝 Notes
 
-- **Docker Method**: Database จะถูก initialize อัตโนมัติด้วย `icas_cmu_hub.sql` เมื่อ container เริ่มทำงานครั้งแรก
-- **npm Method**: ต้อง import `icas_cmu_hub.sql` ผ่าน phpMyAdmin หรือ MySQL client
-- Frontend ใช้ axios สำหรับ API calls (configured ใน `src/config/api.ts`)
-- Backend ใช้ TypeScript กับ Express และ mysql2
-- หากมี MySQL รันอยู่บน port 3306 แล้ว Docker จะใช้ port 3307 แทน
+### Docker Setup
+- All services run in Docker containers with isolated networking
+- Database data persists in Docker volume `mysql_data`
+- SQL file is automatically executed on first database initialization
+- Ports are configured to avoid conflicts: Frontend (3001), Backend (5002), Database (3307)
 
----
+### Local Development
+- Database connection defaults to XAMPP MySQL (localhost:3306, root, no password)
+- Update `backend/.env` if your MySQL has different credentials
+- Frontend uses axios for API calls (configured in `src/config/api.ts`)
+- Backend uses TypeScript with Express and mysql2
 
-## 🔍 Troubleshooting
+### Troubleshooting
 
-### Port 3306 ถูกใช้งานอยู่
+**Port conflicts:**
+If ports 3001, 5002, or 3307 are already in use, update the port mappings in `docker-compose.yml`.
 
-**ปัญหา**: `bind: Only one usage of each socket address (protocol/network address/port) is normally permitted`
-
-**วิธีแก้**:
-1. ปิด MySQL service ที่รันอยู่บนเครื่อง (XAMPP, MySQL Service, etc.)
-2. หรือเปลี่ยน port ใน `docker-compose.yml` เป็น port อื่น
-
-### Database ไม่ถูก initialize
-
-**ปัญหา**: Database ว่างเปล่า
-
-**วิธีแก้**:
+**Database not initializing:**
+If the SQL file doesn't run, remove the volume and restart:
 ```bash
-# ลบ volume และสร้างใหม่
 docker-compose down -v
 docker-compose up -d
 ```
 
-### Backend ไม่สามารถเชื่อมต่อ Database
+**Frontend can't connect to backend:**
+Ensure the `VITE_API_URL` environment variable matches the backend port (5002 for Docker, 5000 for local).
 
-**ปัญหา**: Backend ไม่สามารถเชื่อมต่อ MySQL container
-
-**วิธีแก้**:
-1. ตรวจสอบว่า MySQL container รันอยู่: `docker-compose ps`
-2. ตรวจสอบ logs: `docker-compose logs mysql`
-3. ตรวจสอบ environment variables ใน `docker-compose.yml`

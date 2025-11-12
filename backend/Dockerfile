@@ -27,7 +27,7 @@ RUN apk add --no-cache wget
 COPY package.json package-lock.json* ./
 
 # Install production dependencies only
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist

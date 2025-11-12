@@ -14,7 +14,6 @@ import {
   Inbox,
   Users,
   ClipboardList,
-  Menu,
   QrCode,
 } from "lucide-react";
 import {
@@ -55,25 +54,15 @@ const getUserInitials = (user: User): string => {
   return `${firstInitial}${lastInitial}`;
 };
 
-const getMenuItemsForRole = (role: string) => {
-  const commonItems = [
-    {
-      id: "dashboard",
-      path: "/dashboard",
-      title: "Dashboard",
-      icon: LayoutDashboard,
-    },
-    {
-      id: "calendar",
-      path: "/calendar",
-      title: "Calendar",
-      icon: Calendar,
-    },
-  ];
-
+export const getMenuItemsForRole = (role: string) => {
   if (role === "member") {
     return [
-      ...commonItems,
+      {
+        id: "dashboard",
+        path: "/dashboard",
+        title: "Dashboard",
+        icon: LayoutDashboard,
+      },
       {
         id: "check-in",
         path: "/check-in",
@@ -95,44 +84,28 @@ const getMenuItemsForRole = (role: string) => {
     ];
   }
 
+  const commonItems = [
+    {
+      id: "dashboard",
+      path: "/dashboard",
+      title: "Dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      id: "calendar",
+      path: "/calendar",
+      title: "Calendar",
+      icon: Calendar,
+    },
+  ];
+
   if (role === "leader") {
     return [
-      ...commonItems,
       {
-        id: "check-in",
-        path: "/check-in",
-        title: "Check In",
-        icon: QrCode,
-      },
-      {
-        id: "clubs",
-        path: "/clubs",
-        title: "Club Management",
-        icon: Building2,
-      },
-      {
-        id: "budget",
-        path: "/budget",
-        title: "Smart document",
-        icon: Wallet,
-      },
-      {
-        id: "assignments",
-        path: "/assignments",
-        title: "My Assignments",
-        icon: ClipboardList,
-      },
-      {
-        id: "report-inbox",
-        path: "/report-inbox",
-        title: "Report Inbox",
-        icon: Inbox,
-      },
-      {
-        id: "report",
-        path: "/report",
-        title: "Report",
-        icon: FileText,
+        id: "dashboard",
+        path: "/dashboard",
+        title: "Dashboard",
+        icon: LayoutDashboard,
       },
     ];
   }
@@ -150,12 +123,6 @@ const getMenuItemsForRole = (role: string) => {
         path: "/manage-owners",
         title: "Manage Club",
         icon: UserCog,
-      },
-      {
-        id: "check-in",
-        path: "/check-in",
-        title: "Check In",
-        icon: QrCode,
       },
       {
         id: "report-inbox",
@@ -187,6 +154,28 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Ensure Sheet is closed on desktop initially
+  React.useEffect(() => {
+    if (!isMobile) {
+      setOpenMobile(false);
+    }
+  }, [isMobile, setOpenMobile]);
+
+  // Local state to control Sheet on desktop - explicitly start as false
+  // Use a ref to track if we've initialized to prevent any initial open state
+  const [desktopSheetOpen, setDesktopSheetOpen] = React.useState(false);
+  const hasInitialized = React.useRef(false);
+  
+  // Ensure desktop Sheet stays closed when switching from mobile to desktop
+  React.useEffect(() => {
+    if (!isMobile && !hasInitialized.current) {
+      setDesktopSheetOpen(false);
+      hasInitialized.current = true;
+    } else if (!isMobile) {
+      setDesktopSheetOpen(false);
+    }
+  }, [isMobile]);
+
   const getRoleLabel = (role: string) => {
     switch (role) {
       case "admin":
@@ -215,9 +204,41 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
 
   const menuItems = getMenuItemsForRole(user.role);
 
-  const handleIconClick = (path: string) => {
+  const handleIconClick = async (path: string) => {
+    // If leader clicks Dashboard, navigate to their first club's home page
+    if (user.role === 'leader' && path === '/dashboard') {
+      try {
+        const { clubApi } = await import('../features/club/api/clubApi');
+        const clubs = await clubApi.getLeaderClubs();
+        if (clubs.length > 0) {
+          navigate(`/club/${clubs[0].id}/home`);
+          return;
+        }
+      } catch (error) {
+        console.error('Error fetching leader clubs:', error);
+      }
+    }
     navigate(path);
     // Don't open expanded sidebar, just change view
+  };
+
+  const handleLinkClick = async (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
+    // If leader clicks Dashboard, navigate to their first club's home page
+    if (user.role === 'leader' && path === '/dashboard') {
+      e.preventDefault();
+      try {
+        const { clubApi } = await import('../features/club/api/clubApi');
+        const clubs = await clubApi.getLeaderClubs();
+        if (clubs.length > 0) {
+          navigate(`/club/${clubs[0].id}/home`);
+          return;
+        }
+      } catch (error) {
+        console.error('Error fetching leader clubs:', error);
+      }
+      // Fallback to regular dashboard if no clubs found
+      navigate(path);
+    }
   };
 
   // Mobile icon-only sidebar (always visible)
@@ -244,25 +265,6 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
                 </TooltipTrigger>
                 <TooltipContent side="right">
                   <p>Open Menu</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-
-          {/* Expand/Menu button */}
-          <div className="px-2 pb-2 border-b border-sidebar-border">
-            <TooltipProvider delayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setOpenMobile(true)}
-                    className="w-full p-2 flex items-center justify-center hover:bg-sidebar-accent rounded transition-colors"
-                  >
-                    <Menu className="h-5 w-5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>Expand Menu</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -340,9 +342,15 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
                         <SidebarMenuItem key={item.id}>
                           <SidebarMenuButton
                             asChild
-                            isActive={location.pathname === item.path}
+                            isActive={location.pathname === item.path || (user.role === 'leader' && item.path === '/dashboard' && location.pathname.startsWith('/club/'))}
                           >
-                            <Link to={item.path} onClick={() => setOpenMobile(false)}>
+                            <Link 
+                              to={item.path} 
+                              onClick={(e) => {
+                                handleLinkClick(e, item.path);
+                                setOpenMobile(false);
+                              }}
+                            >
                             <item.icon className="h-4 w-4" />
                             <span>{item.title}</span>
                             </Link>
@@ -391,70 +399,169 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
     );
   }
 
-  // Desktop sidebar (full sidebar)
+  // Desktop sidebar (icon-only, like mobile)
   return (
-    <Sidebar>
-      <SidebarHeader className="border-b p-4">
-        <div className="space-y-2">
-          <div className="flex justify-center">
-            <img 
-              src="/logo/logopng.png" 
-              alt="iCAS-CMU HUB" 
-              className="h-12 w-auto object-contain"
-            />
-          </div>
+    <>
+      {/* Icon-only sidebar - always visible on desktop */}
+      <div className="fixed left-0 top-0 bottom-0 w-12 hidden md:flex bg-sidebar border-r border-sidebar-border z-20 flex-col">
+        {/* Logo icon */}
+        <div className="p-2 border-b border-sidebar-border flex items-center justify-center">
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    setDesktopSheetOpen(true);
+                  }}
+                  className="w-full flex items-center justify-center hover:bg-sidebar-accent rounded transition-colors"
+                >
+                  <img 
+                    src="/logo/logopng.png" 
+                    alt="iCAS-CMU HUB" 
+                    className="h-8 w-8 object-contain"
+                  />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Open Menu</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.id}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === item.path}
+
+        {/* Navigation icons */}
+        <div className="flex-1 overflow-y-auto py-2">
+          <TooltipProvider delayDuration={0}>
+            {menuItems.map((item) => (
+              <Tooltip key={item.id}>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => handleIconClick(item.path)}
+                    className={`w-full p-3 flex items-center justify-center transition-colors ${
+                      location.pathname === item.path
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    }`}
                   >
-                    <Link to={item.path}>
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter className="border-t p-4 space-y-4">
-        <div className="flex items-center gap-3">
-          <Avatar>
-            <AvatarImage src={user.avatar || getDiceBearAvatar(getUserFullName(user))} />
-            <AvatarFallback>{getUserInitials(user)}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm truncate">{getUserFullName(user)}</p>
-            <div className={`inline-block px-2 py-0.5 rounded text-xs mt-1 ${getRoleBadgeColor(user.role)}`}>
-              {getRoleLabel(user.role)}
-            </div>
-            {user.clubName && (
-              <p className="text-xs text-muted-foreground truncate mt-1">
-                {user.clubName}
-              </p>
-            )}
-          </div>
+                    <item.icon className="h-5 w-5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>{item.title}</p>
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </TooltipProvider>
         </div>
-        <Separator />
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={onLogout}
+
+        {/* User avatar icon */}
+        <div className="p-2 border-t border-sidebar-border">
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    setDesktopSheetOpen(true);
+                  }}
+                  className="w-full flex items-center justify-center"
+                >
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.avatar || getDiceBearAvatar(getUserFullName(user))} />
+                    <AvatarFallback className="text-xs">{getUserInitials(user)}</AvatarFallback>
+                  </Avatar>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>{getUserFullName(user)}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
+
+      {/* Full sidebar overlay (expanded on icon click) - only render on desktop */}
+      {isMobile === false && (
+        <Sheet open={desktopSheetOpen} onOpenChange={setDesktopSheetOpen}>
+        <SheetContent 
+          side="left" 
+          className="w-[18rem] md:w-[25rem] md:max-w-none p-0 bg-sidebar text-sidebar-foreground"
+          style={{ maxWidth: isMobile ? undefined : '25rem' }}
         >
-          <LogOut className="h-4 w-4 mr-2" />
-          Sign Out
-        </Button>
-      </SidebarFooter>
-    </Sidebar>
+          <div className="flex h-full w-full flex-col">
+            <SidebarHeader className="border-b p-4">
+              <div className="space-y-2">
+                <div className="flex justify-center">
+                  <img 
+                    src="/logo/logopng.png" 
+                    alt="iCAS-CMU HUB" 
+                    className="h-12 w-auto object-contain"
+                  />
+                </div>
+              </div>
+            </SidebarHeader>
+            <SidebarContent>
+              <SidebarGroup>
+                <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {menuItems.map((item) => (
+                      <SidebarMenuItem key={item.id}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={location.pathname === item.path || (user.role === 'leader' && item.path === '/dashboard' && location.pathname.startsWith('/club/'))}
+                        >
+                          <Link 
+                            to={item.path} 
+                            onClick={(e) => {
+                              handleLinkClick(e, item.path);
+                              setDesktopSheetOpen(false);
+                            }}
+                          >
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </SidebarContent>
+            <SidebarFooter className="border-t p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <Avatar>
+                  <AvatarImage src={user.avatar || getDiceBearAvatar(getUserFullName(user))} />
+                  <AvatarFallback>{getUserInitials(user)}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate">{getUserFullName(user)}</p>
+                  <div className={`inline-block px-2 py-0.5 rounded text-xs mt-1 ${getRoleBadgeColor(user.role)}`}>
+                    {getRoleLabel(user.role)}
+                  </div>
+                  {user.clubName && (
+                    <p className="text-xs text-muted-foreground truncate mt-1">
+                      {user.clubName}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <Separator />
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  onLogout();
+                  setDesktopSheetOpen(false);
+                }}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
+            </SidebarFooter>
+          </div>
+        </SheetContent>
+      </Sheet>
+      )}
+    </>
   );
 }
