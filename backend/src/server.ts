@@ -60,6 +60,9 @@ const corsOptions: CorsOptions = {
 // Handle preflight requests
 app.options('*', cors(corsOptions));
 
+// Trust proxy for accurate IP addresses (needed for rate limiting)
+app.set('trust proxy', true);
+
 // Middleware - CORS must be before other middleware
 app.use(cors(corsOptions));
 app.use(cookieParser());

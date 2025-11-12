@@ -194,26 +194,35 @@ export const login = async (
       throw error;
     }
 
-    // Get user's club memberships
-    const [membershipRows] = await pool.execute<RowDataPacket[]>(
-      `SELECT cm.id, cm.club_id as clubId, cm.status, cm.role, cm.request_date as requestDate,
-              cm.approved_date as approvedDate, c.name as clubName
-       FROM club_memberships cm
-       JOIN clubs c ON cm.club_id = c.id
-       WHERE cm.user_id = ?
-       ORDER BY cm.created_at DESC`,
-      [dbUser.id]
-    ) as [RowDataPacket[], any];
+    // Get user's club memberships (if table exists)
+    let memberships: any[] = [];
+    try {
+      const [membershipRows] = await pool.execute<RowDataPacket[]>(
+        `SELECT cm.id, cm.club_id as clubId, cm.status, cm.role, cm.request_date as requestDate,
+                cm.approved_date as approvedDate, c.name as clubName
+         FROM club_memberships cm
+         JOIN clubs c ON cm.club_id = c.id
+         WHERE cm.user_id = ?
+         ORDER BY cm.created_at DESC`,
+        [dbUser.id]
+      ) as [RowDataPacket[], any];
 
-    const memberships = membershipRows.map((row: any) => ({
-      id: row.id,
-      clubId: row.clubId,
-      clubName: row.clubName,
-      status: row.status,
-      role: row.role,
-      requestDate: row.requestDate.toISOString(),
-      approvedDate: row.approvedDate ? row.approvedDate.toISOString() : undefined,
-    }));
+      memberships = membershipRows.map((row: any) => ({
+        id: row.id,
+        clubId: row.clubId,
+        clubName: row.clubName,
+        status: row.status,
+        role: row.role,
+        requestDate: row.requestDate ? row.requestDate.toISOString() : undefined,
+        approvedDate: row.approvedDate ? row.approvedDate.toISOString() : undefined,
+      }));
+    } catch (error: any) {
+      // If club_memberships table doesn't exist, just use empty array
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️  club_memberships table not found, using empty memberships array');
+      }
+      memberships = [];
+    }
 
     // Convert database user to application user
     const user: User = {
@@ -292,26 +301,35 @@ export const verify = async (
 
     const dbUser = rows[0];
 
-    // Get user's club memberships
-    const [membershipRows] = await pool.execute<RowDataPacket[]>(
-      `SELECT cm.id, cm.club_id as clubId, cm.status, cm.role, cm.request_date as requestDate,
-              cm.approved_date as approvedDate, c.name as clubName
-       FROM club_memberships cm
-       JOIN clubs c ON cm.club_id = c.id
-       WHERE cm.user_id = ?
-       ORDER BY cm.created_at DESC`,
-      [dbUser.id]
-    ) as [RowDataPacket[], any];
+    // Get user's club memberships (if table exists)
+    let memberships: any[] = [];
+    try {
+      const [membershipRows] = await pool.execute<RowDataPacket[]>(
+        `SELECT cm.id, cm.club_id as clubId, cm.status, cm.role, cm.request_date as requestDate,
+                cm.approved_date as approvedDate, c.name as clubName
+         FROM club_memberships cm
+         JOIN clubs c ON cm.club_id = c.id
+         WHERE cm.user_id = ?
+         ORDER BY cm.created_at DESC`,
+        [dbUser.id]
+      ) as [RowDataPacket[], any];
 
-    const memberships = membershipRows.map((row: any) => ({
-      id: row.id,
-      clubId: row.clubId,
-      clubName: row.clubName,
-      status: row.status,
-      role: row.role,
-      requestDate: row.requestDate.toISOString(),
-      approvedDate: row.approvedDate ? row.approvedDate.toISOString() : undefined,
-    }));
+      memberships = membershipRows.map((row: any) => ({
+        id: row.id,
+        clubId: row.clubId,
+        clubName: row.clubName,
+        status: row.status,
+        role: row.role,
+        requestDate: row.requestDate ? row.requestDate.toISOString() : undefined,
+        approvedDate: row.approvedDate ? row.approvedDate.toISOString() : undefined,
+      }));
+    } catch (error: any) {
+      // If club_memberships table doesn't exist, just use empty array
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️  club_memberships table not found, using empty memberships array');
+      }
+      memberships = [];
+    }
 
     const user: User = {
       id: dbUser.id,
@@ -393,26 +411,35 @@ export const getMe = async (
 
     const dbUser = rows[0];
 
-    // Get user's club memberships
-    const [membershipRows] = await pool.execute<RowDataPacket[]>(
-      `SELECT cm.id, cm.club_id as clubId, cm.status, cm.role, cm.request_date as requestDate,
-              cm.approved_date as approvedDate, c.name as clubName
-       FROM club_memberships cm
-       JOIN clubs c ON cm.club_id = c.id
-       WHERE cm.user_id = ?
-       ORDER BY cm.created_at DESC`,
-      [dbUser.id]
-    ) as [RowDataPacket[], any];
+    // Get user's club memberships (if table exists)
+    let memberships: any[] = [];
+    try {
+      const [membershipRows] = await pool.execute<RowDataPacket[]>(
+        `SELECT cm.id, cm.club_id as clubId, cm.status, cm.role, cm.request_date as requestDate,
+                cm.approved_date as approvedDate, c.name as clubName
+         FROM club_memberships cm
+         JOIN clubs c ON cm.club_id = c.id
+         WHERE cm.user_id = ?
+         ORDER BY cm.created_at DESC`,
+        [dbUser.id]
+      ) as [RowDataPacket[], any];
 
-    const memberships = membershipRows.map((row: any) => ({
-      id: row.id,
-      clubId: row.clubId,
-      clubName: row.clubName,
-      status: row.status,
-      role: row.role,
-      requestDate: row.requestDate.toISOString(),
-      approvedDate: row.approvedDate ? row.approvedDate.toISOString() : undefined,
-    }));
+      memberships = membershipRows.map((row: any) => ({
+        id: row.id,
+        clubId: row.clubId,
+        clubName: row.clubName,
+        status: row.status,
+        role: row.role,
+        requestDate: row.requestDate ? row.requestDate.toISOString() : undefined,
+        approvedDate: row.approvedDate ? row.approvedDate.toISOString() : undefined,
+      }));
+    } catch (error: any) {
+      // If club_memberships table doesn't exist, just use empty array
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️  club_memberships table not found, using empty memberships array');
+      }
+      memberships = [];
+    }
 
     const user: User = {
       id: dbUser.id,

@@ -16,17 +16,25 @@ const pool = mysql.createPool({
   keepAliveInitialDelay: 0,
 });
 
-// Test database connection
-export const testConnection = async (): Promise<boolean> => {
-  try {
-    const connection = await pool.getConnection();
-    console.log('✅ Database connected successfully');
-    connection.release();
-    return true;
-  } catch (error) {
-    console.error('❌ Database connection failed:', error);
-    return false;
+// Test database connection with retry logic
+export const testConnection = async (maxRetries: number = 10, delayMs: number = 2000): Promise<boolean> => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const connection = await pool.getConnection();
+      console.log('✅ Database connected successfully');
+      connection.release();
+      return true;
+    } catch (error: any) {
+      if (attempt < maxRetries) {
+        console.log(`⏳ Database connection attempt ${attempt}/${maxRetries} failed, retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+        console.error('❌ Database connection failed after', maxRetries, 'attempts:', error.message);
+        return false;
+      }
+    }
   }
+  return false;
 };
 
 export default pool;
