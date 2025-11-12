@@ -173,7 +173,7 @@ function AppLayout() {
             <Route 
               path="/check-in" 
               element={
-                <ProtectedRoute allowedRoles={["member"]}>
+                <ProtectedRoute allowedRoles={["member", "leader", "admin"]}>
                   <CheckInView user={user} />
                 </ProtectedRoute>
               } 

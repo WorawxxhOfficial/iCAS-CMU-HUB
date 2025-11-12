@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "type-check": "tsc --noEmit",
     "test:db": "tsx src/scripts/test-connection.ts",
-    "import:schema": "tsx src/scripts/import-schema.ts"
+    "import:schema": "tsx src/scripts/import-schema.ts",
+    "reset:passwords": "tsx src/scripts/reset-passwords.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

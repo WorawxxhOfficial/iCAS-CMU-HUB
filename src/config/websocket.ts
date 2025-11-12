@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { getToken } from '../features/auth/hooks/useAuth';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5001';
+const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
 
 let socket: Socket | null = null;
 

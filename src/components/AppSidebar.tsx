@@ -99,6 +99,12 @@ const getMenuItemsForRole = (role: string) => {
     return [
       ...commonItems,
       {
+        id: "check-in",
+        path: "/check-in",
+        title: "Check In",
+        icon: QrCode,
+      },
+      {
         id: "clubs",
         path: "/clubs",
         title: "Club Management",
@@ -144,6 +150,12 @@ const getMenuItemsForRole = (role: string) => {
         path: "/manage-owners",
         title: "Manage Club",
         icon: UserCog,
+      },
+      {
+        id: "check-in",
+        path: "/check-in",
+        title: "Check In",
+        icon: QrCode,
       },
       {
         id: "report-inbox",
