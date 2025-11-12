@@ -34,7 +34,7 @@ export function DashboardView({ user, onUserUpdate }: DashboardViewProps) {
   const navigate = useNavigate();
   const [clubDetails, setClubDetails] = useState<Map<number, Club>>(new Map());
   const [isLoadingClubs, setIsLoadingClubs] = useState(false);
-  const [leaderClub, setLeaderClub] = useState<Club | null>(null);
+  const [leaderClubs, setLeaderClubs] = useState<Club[]>([]);
 
   // Fetch club details for approved memberships (members)
   useEffect(() => {
@@ -68,26 +68,23 @@ export function DashboardView({ user, onUserUpdate }: DashboardViewProps) {
     }
   }, [user.memberships, user.role]);
 
-  // Fetch leader's club
+  // Fetch leader's clubs
   useEffect(() => {
-    const fetchLeaderClub = async () => {
+    const fetchLeaderClubs = async () => {
       if (user.role !== 'leader') return;
 
       try {
         setIsLoadingClubs(true);
         const clubs = await clubApi.getLeaderClubs();
-        if (clubs.length > 0) {
-          // Get the first club (1 leader = 1 club)
-          setLeaderClub(clubs[0]);
-        }
+        setLeaderClubs(clubs);
       } catch (error) {
-        console.error('Error fetching leader club:', error);
+        console.error('Error fetching leader clubs:', error);
       } finally {
         setIsLoadingClubs(false);
       }
     };
 
-    fetchLeaderClub();
+    fetchLeaderClubs();
   }, [user.role]);
 
   // Memoize the membership status change handler
@@ -253,81 +250,89 @@ export function DashboardView({ user, onUserUpdate }: DashboardViewProps) {
             user.role === "admin" 
               ? "นี่คือภาพรวมของชมรมทั้งหมดในมหาวิทยาลัย"
               : user.role === "leader"
-              ? `นี่คือสิ่งที่เกิดขึ้นกับ${leaderClub?.name || user.clubName || "ชมรมของคุณ"}`
+              ? `นี่คือสิ่งที่เกิดขึ้นกับ${leaderClubs.length > 0 ? leaderClubs.map(c => c.name).join(", ") : user.clubName || "ชมรมของคุณ"}`
               : "นี่คือสรุปกิจกรรมชมรมของคุณ"
           }
         </p>
       </div>
 
-      {/* Leader's Club - Only for leaders */}
+      {/* Leader's Clubs - Only for leaders */}
       {user.role === "leader" && (
         <Card>
           <CardHeader>
             <CardTitle>ชมรมของคุณ</CardTitle>
+            <CardDescription>
+              ชมรมที่คุณเป็นหัวหน้า ({leaderClubs.length} ชมรม)
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoadingClubs ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>กำลังโหลดข้อมูลชมรม...</p>
               </div>
-            ) : !leaderClub ? (
+            ) : leaderClubs.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p>คุณยังไม่มีชมรม</p>
               </div>
             ) : (
-              <Card 
-                className="hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(`/club/${leaderClub.id}/home`)}
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <Avatar className="h-12 w-12">
-                      <AvatarImage src={leaderClub.logo} />
-                      <AvatarFallback>
-                        {leaderClub.name.substring(4, 6)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      หัวหน้า
-                    </Badge>
-                  </div>
-                  <CardTitle className="text-base mt-3">{leaderClub.name}</CardTitle>
-                  {leaderClub.category && (
-                    <CardDescription>
-                      <Badge variant="outline" className="text-xs">{leaderClub.category}</Badge>
-                    </CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {leaderClub.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {leaderClub.description}
-                    </p>
-                  )}
-                  <div className="space-y-2 text-sm text-muted-foreground">
-                    {leaderClub.memberCount !== undefined && (
-                      <div className="flex items-center gap-2">
-                        <Users className="h-3 w-3" />
-                        <span>{leaderClub.memberCount} สมาชิก</span>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {leaderClubs.map((club) => (
+                  <Card 
+                    key={club.id}
+                    className="hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => navigate(`/club/${club.id}/home`)}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <Avatar className="h-12 w-12">
+                          <AvatarImage src={club.logo} />
+                          <AvatarFallback>
+                            {club.name.substring(4, 6)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          หัวหน้า
+                        </Badge>
                       </div>
-                    )}
-                    {leaderClub.meetingDay && (
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-3 w-3" />
-                        <span>{leaderClub.meetingDay}</span>
+                      <CardTitle className="text-base mt-3">{club.name}</CardTitle>
+                      {club.category && (
+                        <CardDescription>
+                          <Badge variant="outline" className="text-xs">{club.category}</Badge>
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {club.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {club.description}
+                        </p>
+                      )}
+                      <div className="space-y-2 text-sm text-muted-foreground">
+                        {club.memberCount !== undefined && (
+                          <div className="flex items-center gap-2">
+                            <Users className="h-3 w-3" />
+                            <span>{club.memberCount} สมาชิก</span>
+                          </div>
+                        )}
+                        {club.meetingDay && (
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-3 w-3" />
+                            <span>{club.meetingDay}</span>
+                          </div>
+                        )}
+                        {club.location && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-3 w-3" />
+                            <span>{club.location}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {leaderClub.location && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-3 w-3" />
-                        <span>{leaderClub.location}</span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>

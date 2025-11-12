@@ -205,40 +205,12 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
   const menuItems = getMenuItemsForRole(user.role);
 
   const handleIconClick = async (path: string) => {
-    // If leader clicks Dashboard, navigate to their first club's home page
-    if (user.role === 'leader' && path === '/dashboard') {
-      try {
-        const { clubApi } = await import('../features/club/api/clubApi');
-        const clubs = await clubApi.getLeaderClubs();
-        if (clubs.length > 0) {
-          navigate(`/club/${clubs[0].id}/home`);
-          return;
-        }
-      } catch (error) {
-        console.error('Error fetching leader clubs:', error);
-      }
-    }
     navigate(path);
     // Don't open expanded sidebar, just change view
   };
 
   const handleLinkClick = async (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
-    // If leader clicks Dashboard, navigate to their first club's home page
-    if (user.role === 'leader' && path === '/dashboard') {
-      e.preventDefault();
-      try {
-        const { clubApi } = await import('../features/club/api/clubApi');
-        const clubs = await clubApi.getLeaderClubs();
-        if (clubs.length > 0) {
-          navigate(`/club/${clubs[0].id}/home`);
-          return;
-        }
-      } catch (error) {
-        console.error('Error fetching leader clubs:', error);
-      }
-      // Fallback to regular dashboard if no clubs found
-      navigate(path);
-    }
+    // No special handling needed - let the Link component handle navigation
   };
 
   // Mobile icon-only sidebar (always visible)
