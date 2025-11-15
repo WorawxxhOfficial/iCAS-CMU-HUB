@@ -24,6 +24,8 @@ import { ClubSidebar } from "./components/ClubSidebar";
 import { ClubProvider } from "./contexts/ClubContext";
 import { ClubHomeView } from "./components/club/ClubHomeView";
 import { ClubAssignmentsView } from "./components/club/ClubAssignmentsView";
+import { AssignmentDetailView } from "./components/club/AssignmentDetailView";
+import { MemberSubmissionDetailView } from "./components/club/MemberSubmissionDetailView";
 import { ClubCalendarView } from "./components/club/ClubCalendarView";
 import { ClubChatView } from "./components/club/ClubChatView";
 import { ClubMembersView } from "./components/club/ClubMembersView";
@@ -143,22 +145,34 @@ function AppLayout() {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
-        <AppSidebar 
-          user={user}
-          onLogout={handleLogout}
-        />
+        {/* Hide main sidebar on mobile when on club routes */}
+        {!(isMobile && isClubRoute) && (
+          <AppSidebar 
+            user={user}
+            onLogout={handleLogout}
+          />
+        )}
         {isClubRoute && (
           <ClubProvider>
             <ClubSidebar />
           </ClubProvider>
         )}
         <main 
-          className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50" 
+          className={`flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 ${
+            isMobile 
+              ? '' 
+              : isClubRoute 
+                ? 'md:ml-[16.5rem] lg:ml-[18.5rem] xl:ml-[20.5rem]'
+                : ''
+          }`}
           style={{ 
-            paddingLeft: isMobile 
-              ? (isClubRoute ? '7rem' : '3rem') 
-              : (isClubRoute ? 'calc(4rem + 18rem)' : '3rem'), 
-            minWidth: 0 
+            minWidth: 0,
+            ...(isMobile 
+              ? { marginLeft: '3rem' }
+              : isClubRoute 
+                ? { marginLeft: '16.5rem' }
+                : { marginLeft: '3rem' }
+            )
           }}
         >
           <Routes>
@@ -311,6 +325,22 @@ function AppLayout() {
               element={
                 <ClubProvider>
                   <ClubAssignmentsView />
+                </ClubProvider>
+              } 
+            />
+            <Route 
+              path="/club/:clubId/assignment/:assignmentId" 
+              element={
+                <ClubProvider>
+                  <AssignmentDetailView />
+                </ClubProvider>
+              } 
+            />
+            <Route 
+              path="/club/:clubId/assignment/:assignmentId/submission/:submissionId" 
+              element={
+                <ClubProvider>
+                  <MemberSubmissionDetailView />
                 </ClubProvider>
               } 
             />

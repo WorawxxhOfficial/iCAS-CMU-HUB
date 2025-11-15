@@ -3765,6 +3765,22 @@ html {
   }
 }
 
+@keyframes slideOutToLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
 .club-sidebar-enter {
   animation: slideInFromLeft 0.3s ease-out forwards;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.club-sidebar-exit {
+  animation: slideOutToLeft 0.3s ease-in forwards;
 }

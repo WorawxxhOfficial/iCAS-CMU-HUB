@@ -16,6 +16,9 @@ import {
   ClipboardList,
   QrCode,
 } from "lucide-react";
+
+// Logo path - files in public folder are served from root
+const logoPath = "/logo/logopng.png";
 import {
   Sidebar,
   SidebarContent,
@@ -205,40 +208,12 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
   const menuItems = getMenuItemsForRole(user.role);
 
   const handleIconClick = async (path: string) => {
-    // If leader clicks Dashboard, navigate to their first club's home page
-    if (user.role === 'leader' && path === '/dashboard') {
-      try {
-        const { clubApi } = await import('../features/club/api/clubApi');
-        const clubs = await clubApi.getLeaderClubs();
-        if (clubs.length > 0) {
-          navigate(`/club/${clubs[0].id}/home`);
-          return;
-        }
-      } catch (error) {
-        console.error('Error fetching leader clubs:', error);
-      }
-    }
     navigate(path);
     // Don't open expanded sidebar, just change view
   };
 
   const handleLinkClick = async (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
-    // If leader clicks Dashboard, navigate to their first club's home page
-    if (user.role === 'leader' && path === '/dashboard') {
-      e.preventDefault();
-      try {
-        const { clubApi } = await import('../features/club/api/clubApi');
-        const clubs = await clubApi.getLeaderClubs();
-        if (clubs.length > 0) {
-          navigate(`/club/${clubs[0].id}/home`);
-          return;
-        }
-      } catch (error) {
-        console.error('Error fetching leader clubs:', error);
-      }
-      // Fallback to regular dashboard if no clubs found
-      navigate(path);
-    }
+    // No special handling needed - let the Link component handle navigation
   };
 
   // Mobile icon-only sidebar (always visible)
@@ -257,9 +232,22 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
                     className="w-full flex items-center justify-center hover:bg-sidebar-accent rounded transition-colors"
                   >
                     <img 
-                      src="/logo/logopng.png" 
+                      src={logoPath} 
                       alt="iCAS-CMU HUB" 
                       className="h-8 w-8 object-contain"
+                      loading="eager"
+                      onError={(e) => {
+                        // Fallback: show text if image fails to load
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent && !parent.querySelector('.logo-fallback')) {
+                          const fallback = document.createElement('span');
+                          fallback.className = 'logo-fallback text-xs font-bold text-sidebar-foreground';
+                          fallback.textContent = 'iCAS';
+                          parent.appendChild(fallback);
+                        }
+                      }}
                     />
                   </button>
                 </TooltipTrigger>
@@ -325,11 +313,30 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
               <SidebarHeader className="border-b p-4">
                 <div className="space-y-2">
                   <div className="flex justify-center">
-                    <img 
-                      src="/logo/logopng.png" 
-                      alt="iCAS-CMU HUB" 
-                      className="h-12 w-auto object-contain"
-                    />
+                    <Link 
+                      to="/dashboard"
+                      onClick={() => setOpenMobile(false)}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                    >
+                      <img 
+                        src={logoPath} 
+                        alt="iCAS-CMU HUB" 
+                        className="h-12 w-auto object-contain"
+                        loading="eager"
+                        onError={(e) => {
+                          // Fallback: show text if image fails to load
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent && !parent.querySelector('.logo-fallback')) {
+                            const fallback = document.createElement('span');
+                            fallback.className = 'logo-fallback text-sm font-bold text-sidebar-foreground';
+                            fallback.textContent = 'iCAS-CMU HUB';
+                            parent.appendChild(fallback);
+                          }
+                        }}
+                      />
+                    </Link>
                   </div>
                 </div>
               </SidebarHeader>
@@ -491,11 +498,17 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
             <SidebarHeader className="border-b p-4">
               <div className="space-y-2">
                 <div className="flex justify-center">
-                  <img 
-                    src="/logo/logopng.png" 
-                    alt="iCAS-CMU HUB" 
-                    className="h-12 w-auto object-contain"
-                  />
+                  <Link 
+                    to="/dashboard"
+                    onClick={() => setDesktopSheetOpen(false)}
+                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                  >
+                    <img 
+                      src="/logo/logopng.png" 
+                      alt="iCAS-CMU HUB" 
+                      className="h-12 w-auto object-contain"
+                    />
+                  </Link>
                 </div>
               </div>
             </SidebarHeader>

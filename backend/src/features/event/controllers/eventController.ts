@@ -637,10 +637,18 @@ export const getEventStats = async (
       } else {
         averageAttendance = 0;
       }
-    } catch (error) {
-      // If query fails (e.g., no check_ins), default to 0
-      console.error('Error calculating average attendance:', error);
-      averageAttendance = 0;
+    } catch (error: any) {
+      // If check_ins table doesn't exist, just use 0
+      if (error.code === 'ER_NO_SUCH_TABLE' && error.sqlMessage?.includes('check_ins')) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('⚠️  check_ins table not found, using 0 for average attendance');
+        }
+        averageAttendance = 0;
+      } else {
+        // If query fails for other reasons, default to 0
+        console.error('Error calculating average attendance:', error);
+        averageAttendance = 0;
+      }
     }
 
     const stats: EventStats = {

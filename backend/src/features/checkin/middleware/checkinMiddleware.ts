@@ -64,6 +64,7 @@ export const validateEvent = async (
 
 /**
  * Middleware to check if user is member
+ * Note: Leaders and admins can also check in (they are also members of clubs)
  */
 export const requireMember = (
   req: AuthRequest,
@@ -76,8 +77,9 @@ export const requireMember = (
     return next(error);
   }
 
-  if (req.user.role !== 'member') {
-    const error: ApiError = new Error('Member access required');
+  // Allow member, leader, and admin to check in
+  if (req.user.role !== 'member' && req.user.role !== 'leader' && req.user.role !== 'admin') {
+    const error: ApiError = new Error('Member, leader, or admin access required');
     error.statusCode = 403;
     return next(error);
   }
