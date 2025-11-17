@@ -4,9 +4,9 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
 
 export const api = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  // Don't set Content-Type header here - let axios set it automatically
+  // For JSON requests, axios will set 'application/json'
+  // For FormData requests, axios will set 'multipart/form-data' with boundary
   withCredentials: true, // Send cookies with requests
   timeout: 3000, // 3 second timeout for all requests
 });

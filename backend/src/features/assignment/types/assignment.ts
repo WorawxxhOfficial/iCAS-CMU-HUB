@@ -1,3 +1,14 @@
+export interface AssignmentAttachment {
+  id: number;
+  assignmentId: number;
+  filePath: string;
+  fileName: string;
+  fileMimeType?: string;
+  fileSize?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Assignment {
   id: number;
   clubId: number;
@@ -6,9 +17,13 @@ export interface Assignment {
   maxScore?: number;
   availableDate: Date;
   dueDate: Date;
+  isVisible?: boolean;
+  // Legacy fields for backward compatibility
   attachmentPath?: string;
   attachmentName?: string;
   attachmentMimeType?: string;
+  // New multiple attachments support
+  attachments?: AssignmentAttachment[];
   createdBy: number;
   createdAt: Date;
   updatedAt: Date;
@@ -50,6 +65,7 @@ export interface UpdateAssignmentRequest {
   maxScore?: number;
   availableDate?: string;
   dueDate?: string;
+  isVisible?: boolean;
   attachmentPath?: string;
   attachmentName?: string;
   attachmentMimeType?: string;
@@ -79,6 +95,7 @@ export interface AssignmentComment {
   userId: number;
   commentText: string;
   parentCommentId?: number;
+  isHidden?: boolean;
   createdAt: Date;
   updatedAt: Date;
   userFirstName?: string;

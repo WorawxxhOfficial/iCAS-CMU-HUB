@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useClub } from "../../contexts/ClubContext";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 import { assignmentApi, AssignmentComment } from "../../features/assignment/api/assignmentApi";
-import { MessageSquare, Send, Edit, Trash2, Reply, MoreVertical } from "lucide-react";
+import { MessageSquare, Send, Edit, Trash2, Reply, MoreVertical, Eye, EyeOff } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +31,8 @@ export function AssignmentComments({ assignmentId }: AssignmentCommentsProps) {
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const commentsEndRef = useRef<HTMLDivElement>(null);
+  
+  const isLeader = user?.role === 'leader' || user?.role === 'admin';
 
   useEffect(() => {
     if (clubId && assignmentId) {
@@ -123,6 +125,19 @@ export function AssignmentComments({ assignmentId }: AssignmentCommentsProps) {
     }
   };
 
+  const handleToggleCommentVisibility = async (commentId: number, isHidden: boolean) => {
+    if (!clubId || !assignmentId) return;
+
+    try {
+      await assignmentApi.hideComment(clubId, assignmentId, commentId, isHidden);
+      fetchComments();
+      toast.success(isHidden ? "Comment hidden" : "Comment unhidden");
+    } catch (error: any) {
+      console.error("Error toggling comment visibility:", error);
+      toast.error(error.response?.data?.message || "Failed to update comment visibility");
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -146,6 +161,7 @@ export function AssignmentComments({ assignmentId }: AssignmentCommentsProps) {
   const renderComment = (comment: AssignmentComment, isReply = false) => {
     const isOwner = user?.id === comment.userId;
     const isEditing = editingCommentId === comment.id;
+    const isHidden = comment.isHidden === true;
 
     return (
       <div key={comment.id} className={isReply ? "ml-8 mt-3" : "mt-4"}>
@@ -167,7 +183,10 @@ export function AssignmentComments({ assignmentId }: AssignmentCommentsProps) {
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">
+                  {isHidden && isLeader && (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className={`font-medium text-sm ${isHidden && isLeader ? 'text-muted-foreground' : ''}`}>
                     {comment.userFirstName} {comment.userLastName}
                   </span>
                   {isOwner && (
@@ -176,11 +195,11 @@ export function AssignmentComments({ assignmentId }: AssignmentCommentsProps) {
                     </Badge>
                   )}
                 </div>
-                <span className="text-xs text-muted-foreground">
+                <span className={`text-xs ${isHidden && isLeader ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
                   {formatDate(comment.createdAt)}
                 </span>
               </div>
-              {isOwner && (
+              {(isOwner || isLeader) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
@@ -188,22 +207,43 @@ export function AssignmentComments({ assignmentId }: AssignmentCommentsProps) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setEditingCommentId(comment.id);
-                        setEditText(comment.commentText);
-                      }}
-                    >
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleDeleteComment(comment.id)}
-                      className="text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
+                    {isOwner && (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setEditingCommentId(comment.id);
+                          setEditText(comment.commentText);
+                        }}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                    )}
+                    {isLeader && (
+                      <DropdownMenuItem
+                        onClick={() => handleToggleCommentVisibility(comment.id, !isHidden)}
+                      >
+                        {isHidden ? (
+                          <>
+                            <Eye className="h-4 w-4 mr-2" />
+                            Unhide
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff className="h-4 w-4 mr-2" />
+                            Hide
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                    )}
+                    {(isOwner || isLeader) && (
+                      <DropdownMenuItem
+                        onClick={() => handleDeleteComment(comment.id)}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
@@ -239,7 +279,7 @@ export function AssignmentComments({ assignmentId }: AssignmentCommentsProps) {
               </div>
             ) : (
               <>
-                <p className="text-sm mt-2 whitespace-pre-wrap break-words">
+                <p className={`text-sm mt-2 whitespace-pre-wrap break-words ${isHidden && isLeader ? 'text-muted-foreground' : ''}`}>
                   {comment.commentText}
                 </p>
                 {!isReply && (
@@ -322,10 +362,10 @@ export function AssignmentComments({ assignmentId }: AssignmentCommentsProps) {
             rows={3}
             className="resize-none"
           />
-          <div className="flex justify-end">
-            <Button type="submit" size="sm" disabled={!newComment.trim()}>
-              <Send className="h-4 w-4 mr-2" />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+            <Button type="submit" disabled={!newComment.trim()}>
               Post Comment
+              <Send className="h-4 w-4 ml-2" />
             </Button>
           </div>
         </form>
@@ -337,9 +377,10 @@ export function AssignmentComments({ assignmentId }: AssignmentCommentsProps) {
             <p className="text-xs text-muted-foreground">Loading comments...</p>
           </div>
         ) : comments.length === 0 ? (
-          <div className="py-8 text-center">
-            <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">No comments yet. Be the first to comment!</p>
+          <div className="text-center">
+            <div className="border-t border-border pt-8"></div>
+            <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50 text-muted-foreground mt-6" />
+            <p className="text-sm text-muted-foreground mb-6">No comments yet. Be the first to comment!</p>
           </div>
         ) : (
           <div className="space-y-4 max-h-[500px] overflow-y-auto">

@@ -3784,3 +3784,9 @@ html {
 .club-sidebar-exit {
   animation: slideOutToLeft 0.3s ease-in forwards;
 }
+
+/* DateTime Local Input Spacing */
+input[type="datetime-local"] {
+  padding-left: 12px !important;
+  padding-right: 50px !important;
+}

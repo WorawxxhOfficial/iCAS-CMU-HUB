@@ -46,7 +46,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
   const [members, setMembers] = useState<ClubMember[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [formData, setFormData] = useState<CreateAssignmentRequest & {
-    attachmentFile?: File | null;
+    attachmentFiles?: File[];
     isVisible: boolean;
     assignedMemberIds: number[];
   }>({
@@ -57,6 +57,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
     dueDate: "",
     isVisible: true,
     assignedMemberIds: [],
+    attachmentFiles: [],
   });
   const [titleError, setTitleError] = useState(false);
   const [availableDateError, setAvailableDateError] = useState(false);
@@ -83,7 +84,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
         dueDate: "",
         isVisible: true,
         assignedMemberIds: [],
-        attachmentFile: null,
+        attachmentFiles: [],
       });
       setTitleError(false);
       setAvailableDateError(false);
@@ -125,7 +126,8 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
 
     let hasErrors = false;
     let errorMessages: string[] = [];
-    const now = new Date();
+    // Add 1 minute buffer to account for timing precision issues
+    const now = new Date(Date.now() - 60000);
 
     // Validate title
     if (!formData.title.trim()) {
@@ -142,7 +144,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
     } else {
       // Check if available date is in the past
       const available = new Date(formData.availableDate);
-      if (available < now) {
+      if (available.getTime() < now.getTime()) {
         setAvailableDateError(true);
         hasErrors = true;
         errorMessages.push("Available date cannot be in the past");
@@ -157,7 +159,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
     } else {
       // Check if due date is in the past
       const due = new Date(formData.dueDate);
-      if (due < now) {
+      if (due.getTime() < now.getTime()) {
         setDueDateError(true);
         hasErrors = true;
         errorMessages.push("Due date cannot be in the past");
@@ -235,13 +237,13 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
       return;
     }
 
-    // Validate dates are not in the past before submitting
-    const now = new Date();
+    // Validate dates are not in the past before submitting (with 1 minute buffer)
+    const now = new Date(Date.now() - 60000);
     let hasDateErrors = false;
     
     if (formData.availableDate) {
       const available = new Date(formData.availableDate);
-      if (available < now) {
+      if (available.getTime() < now.getTime()) {
         setAvailableDateError(true);
         hasDateErrors = true;
         toast.error("Available date cannot be in the past");
@@ -250,7 +252,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
     
     if (formData.dueDate) {
       const due = new Date(formData.dueDate);
-      if (due < now) {
+      if (due.getTime() < now.getTime()) {
         setDueDateError(true);
         hasDateErrors = true;
         toast.error("Due date cannot be in the past");
@@ -297,7 +299,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
       };
 
       // Create assignment with optional attachment
-      await assignmentApi.createAssignment(clubId, submitData, formData.attachmentFile || undefined);
+      await assignmentApi.createAssignment(clubId, submitData, formData.attachmentFiles && formData.attachmentFiles.length > 0 ? formData.attachmentFiles : undefined);
 
       // Reset form and errors
       setFormData({
@@ -308,7 +310,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
         dueDate: "",
         isVisible: true,
         assignedMemberIds: [],
-        attachmentFile: null,
+        attachmentFiles: [],
       });
       setTitleError(false);
       setAvailableDateError(false);
@@ -334,7 +336,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
       dueDate: "",
       isVisible: true,
       assignedMemberIds: [],
-      attachmentFile: null,
+      attachmentFiles: [],
     });
     setTitleError(false);
     setAvailableDateError(false);
@@ -356,11 +358,11 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
     const value = e.target.value;
     setFormData({ ...formData, availableDate: value });
     
-    // Validate if date is in the past
+    // Validate if date is in the past (with 1 minute buffer)
     if (value) {
       const available = new Date(value);
-      const now = new Date();
-      if (available < now) {
+      const now = new Date(Date.now() - 60000);
+      if (available.getTime() < now.getTime()) {
         setAvailableDateError(true);
       } else {
         setAvailableDateError(false);
@@ -374,11 +376,11 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
     const value = e.target.value;
     setFormData({ ...formData, dueDate: value });
     
-    // Validate if date is in the past
+    // Validate if date is in the past (with 1 minute buffer)
     if (value) {
       const due = new Date(value);
-      const now = new Date();
-      if (due < now) {
+      const now = new Date(Date.now() - 60000);
+      if (due.getTime() < now.getTime()) {
         setDueDateError(true);
       } else {
         setDueDateError(false);
@@ -397,9 +399,8 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
       const allowedTypes = [
         'application/pdf',
         'application/msword',
@@ -416,23 +417,36 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
         'image/gif',
       ];
       
-      if (!allowedTypes.includes(file.type)) {
-        toast.error("Invalid file type. Please upload PDF, DOCX, images, or archive files.");
-        return;
+      const validFiles: File[] = [];
+      for (const file of files) {
+        if (!(file instanceof File)) continue;
+        if (!allowedTypes.includes(file.type)) {
+          toast.error(`${file.name}: Invalid file type. Please upload PDF, DOCX, images, or archive files.`);
+          continue;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`${file.name} is larger than 10MB`);
+          continue;
+        }
+        validFiles.push(file);
       }
-
-      // Validate file size (10MB max)
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error("File size must be less than 10MB");
-        return;
+      if (validFiles.length > 0) {
+        setFormData({ 
+          ...formData, 
+          attachmentFiles: [...(formData.attachmentFiles || []), ...validFiles]
+        });
       }
-
-      setFormData({ ...formData, attachmentFile: file });
+    }
+    // Reset input to allow selecting the same file again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
-  const handleRemoveFile = () => {
-    setFormData({ ...formData, attachmentFile: null });
+  const handleRemoveFile = (index: number) => {
+    const newFiles = [...(formData.attachmentFiles || [])];
+    newFiles.splice(index, 1);
+    setFormData({ ...formData, attachmentFiles: newFiles });
   };
 
   const handleSelectAllMembers = () => {
@@ -544,11 +558,11 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
           </div>
 
           {/* Date Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex flex-col lg:flex-row gap-4">
             {/* Available Date */}
-            <div>
+            <div className="flex-1 min-w-0">
               <Label htmlFor="availableDate" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
+                <Calendar className="h-4 w-4 flex-shrink-0" />
                 Available Date <span className="text-red-500">*</span>
               </Label>
               <Input
@@ -559,7 +573,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
                 onChange={handleAvailableDateChange}
                 required
                 aria-invalid={availableDateError}
-                className={`mt-1 ${
+                className={`mt-1 w-full text-left ${
                   availableDateError
                     ? "border-red-500 focus:border-red-500 focus:ring-red-500 focus-visible:ring-red-500"
                     : "border-input focus:border-ring focus:ring-2 focus:ring-ring"
@@ -569,9 +583,9 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
             </div>
 
             {/* Due Date */}
-            <div>
+            <div className="flex-1 min-w-0">
               <Label htmlFor="dueDate" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
+                <Calendar className="h-4 w-4 flex-shrink-0" />
                 Due Date <span className="text-red-500">*</span>
               </Label>
               <Input
@@ -582,7 +596,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
                 onChange={handleDueDateChange}
                 required
                 aria-invalid={dueDateError}
-                className={`mt-1 ${
+                className={`mt-1 w-full text-left ${
                   dueDateError
                     ? "border-red-500 focus:border-red-500 focus:ring-red-500 focus-visible:ring-red-500"
                     : "border-input focus:border-ring focus:ring-2 focus:ring-ring"
@@ -606,10 +620,10 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
 
     const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
-      const file = e.dataTransfer.files[0];
-      if (file) {
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
         const fakeEvent = {
-          target: { files: [file] }
+          target: { files }
         } as React.ChangeEvent<HTMLInputElement>;
         handleFileChange(fakeEvent);
       }
@@ -634,25 +648,30 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
             id="attachment"
             onChange={handleFileChange}
             accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,image/*"
+            multiple
             className="hidden"
           />
 
-          {formData.attachmentFile ? (
-            <div className="flex items-center gap-2 p-3 bg-muted rounded-md border">
-              <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-sm flex-1 truncate" title={formData.attachmentFile.name}>{truncateFileName(formData.attachmentFile.name)}</span>
-              <span className="text-xs text-muted-foreground flex-shrink-0">
-                ({(formData.attachmentFile.size / 1024 / 1024).toFixed(2)} MB)
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={handleRemoveFile}
-                className="h-6 w-6 p-0 flex-shrink-0"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+          {formData.attachmentFiles && formData.attachmentFiles.length > 0 ? (
+            <div className="space-y-2">
+              {formData.attachmentFiles.map((file, index) => (
+                <div key={index} className="flex items-center gap-2 p-3 bg-muted rounded-md border">
+                  <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <span className="text-sm flex-1 truncate" title={file.name}>{truncateFileName(file.name)}</span>
+                  <span className="text-xs text-muted-foreground flex-shrink-0">
+                    ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleRemoveFile(index)}
+                    className="h-6 w-6 p-0 flex-shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
           ) : (
             <div
@@ -663,8 +682,8 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
               style={{ paddingTop: '5rem', paddingBottom: '5rem', paddingLeft: '3rem', paddingRight: '3rem' }}
             >
               <Upload className="h-16 w-16 mx-auto mb-4 opacity-50 text-muted-foreground" />
-              <p className="text-base font-medium mb-2">Attach file here</p>
-              <p className="text-sm text-muted-foreground">Click to browse or drag and drop</p>
+              <p className="text-base font-medium mb-2">Attach files here</p>
+              <p className="text-sm text-muted-foreground">Click to browse or drag and drop (multiple files supported)</p>
             </div>
           )}
 
@@ -753,7 +772,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
                         }`}
                         onClick={() => handleToggleMember(member.userId)}
                       >
-                        <div className="flex items-center flex-shrink-0">
+                        <div className="flex items-center flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                           <Checkbox
                             id={`member-${member.userId}`}
                             checked={isSelected}
@@ -761,9 +780,12 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
                             onClick={(e) => e.stopPropagation()}
                           />
                         </div>
-                        <Label
-                          htmlFor={`member-${member.userId}`}
+                        <div
                           className="cursor-pointer flex-1 text-sm mb-0 min-w-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleMember(member.userId);
+                          }}
                         >
                           <div className="font-medium text-foreground truncate">
                             {member.user.firstName} {member.user.lastName}
@@ -771,7 +793,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
                           <div className="text-xs text-muted-foreground mt-0.5 truncate">
                             {member.user.email}
                           </div>
-                        </Label>
+                        </div>
                       </div>
                     );
                   })}
@@ -786,7 +808,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onSuccess }: Create
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+      <DialogContent className="!w-[90vw] !max-w-[90vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Assignment</DialogTitle>
           <DialogDescription>

@@ -416,7 +416,7 @@ export function RichTextEditor({ content, onChange, editable = true, minHeight }
         className={`p-2 md:p-4 max-w-none ${minHeight ? '' : 'min-h-[150px] md:min-h-[200px]'}`}
         style={minHeight ? { minHeight } : undefined}
       >
-        <EditorContent editor={editor} className="prose prose-sm md:prose max-w-none" />
+        <EditorContent editor={editor} className="prose prose-sm md:prose max-w-none [&_*]:!mb-0" />
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Badge } from "../ui/badge";
 import { Label } from "../ui/label";
 import { RichTextEditor } from "../ui/rich-text-editor";
@@ -19,12 +20,15 @@ import {
   XCircle,
   AlertCircle,
   Info,
-  Edit
+  Edit,
+  Eye,
+  EyeOff,
+  Download
 } from "lucide-react";
 import { toast } from "sonner";
 import { useClub } from "../../contexts/ClubContext";
 import { useAuth } from "../../features/auth/hooks/useAuth";
-import { assignmentApi, Assignment, AssignmentSubmission } from "../../features/assignment/api/assignmentApi";
+import { assignmentApi, Assignment, AssignmentSubmission, AssignmentAttachment } from "../../features/assignment/api/assignmentApi";
 import { clubApi } from "../../features/club/api/clubApi";
 import { FilePreview } from "./FilePreview";
 import { EditAssignmentDialog } from "./EditAssignmentDialog";
@@ -71,6 +75,7 @@ export function AssignmentDetailView() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<AssignmentAttachment | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Leader view states
@@ -82,10 +87,40 @@ export function AssignmentDetailView() {
   const hasSubmission = assignment?.userSubmission !== null && assignment?.userSubmission !== undefined;
   const isGraded = hasSubmission && assignment?.userSubmission?.gradedAt !== null;
 
+
   useEffect(() => {
     if (clubId && assignmentId) {
       fetchAssignment();
     }
+  }, [clubId, assignmentId]);
+
+  // Refresh assignment when page becomes visible (e.g., after editing from another tab/page)
+  // NOTE: We use a silent refresh that doesn't set loading state to prevent scroll reset
+  useEffect(() => {
+    if (!clubId || !assignmentId) return;
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Silent refresh - preserve scroll position by not setting loading state
+        // This prevents component remount that causes scroll reset
+        fetchAssignmentSilent();
+      }
+    };
+
+    const handleFocus = () => {
+      // Silent refresh - preserve scroll position by not setting loading state
+      // This prevents component remount that causes scroll reset
+      fetchAssignmentSilent();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clubId, assignmentId]);
 
   useEffect(() => {
@@ -112,6 +147,32 @@ export function AssignmentDetailView() {
       navigate(`/club/${clubId}/assignments`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Silent refresh that doesn't set loading state - prevents scroll reset on focus
+  // This is used for background refreshes when window regains focus
+  const fetchAssignmentSilent = async () => {
+    if (!clubId || !assignmentId) return;
+
+    try {
+      // Save current scroll position before refresh
+      const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+      
+      // Fetch without setting loading state to prevent remount
+      const data = await assignmentApi.getAssignment(parseInt(clubId), parseInt(assignmentId));
+      setAssignment(data);
+      
+      // Restore scroll position after state update
+      requestAnimationFrame(() => {
+        window.scrollTo({
+          top: scrollY,
+          behavior: 'auto'
+        });
+      });
+    } catch (error: any) {
+      // Silent fail - don't show error toast on background refresh
+      console.debug('Silent refresh failed:', error);
     }
   };
 
@@ -396,14 +457,13 @@ export function AssignmentDetailView() {
       <div className="p-4 md:p-8 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
+          <button
             onClick={() => navigate(`/club/${clubId}/assignments`)}
+            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all cursor-pointer disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 has-[>svg]:px-3"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
+            <ArrowLeft className="h-4 w-4" />
             Back
-          </Button>
+          </button>
         </div>
 
         {/* Assignment Info */}
@@ -436,7 +496,49 @@ export function AssignmentDetailView() {
                 </span>
               </div>
             )}
-            {assignment.attachmentPath && assignment.attachmentName && (
+            {/* Multiple Attachments */}
+            {assignment.attachments && assignment.attachments.length > 0 && (
+              <div className="pt-2 space-y-2">
+                {assignment.attachments.map((attachment) => (
+                  <div key={attachment.id} className="flex items-center gap-2 p-3 bg-muted rounded-md">
+                    <FileText className="h-4 w-4 flex-shrink-0" />
+                    <span className="text-sm flex-1 truncate min-w-0" title={attachment.fileName}>{truncateFileName(attachment.fileName)}</span>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setPreviewAttachment(attachment);
+                          setIsPreviewOpen(true);
+                        }}
+                        className="p-2 sm:px-3 sm:py-2"
+                        aria-label="Preview file"
+                      >
+                        <Eye className="h-4 w-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Preview</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          // Add cache-busting parameter to ensure latest file is loaded
+                          const fileUrl = assignmentApi.getFileUrl(attachment.filePath);
+                          const urlWithCacheBust = `${fileUrl}?t=${Date.now()}`;
+                          window.open(urlWithCacheBust, '_blank');
+                        }}
+                        className="p-2 sm:px-3 sm:py-2"
+                        aria-label="Download file"
+                      >
+                        <Download className="h-4 w-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Download</span>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Legacy single attachment support */}
+            {(!assignment.attachments || assignment.attachments.length === 0) && assignment.attachmentPath && assignment.attachmentName && (
               <div className="pt-2">
                 <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
                   <FileText className="h-4 w-4 flex-shrink-0" />
@@ -446,7 +548,10 @@ export function AssignmentDetailView() {
                     size="sm"
                     onClick={() => {
                       if (assignment.attachmentPath) {
-                        window.open(assignmentApi.getFileUrl(assignment.attachmentPath), '_blank');
+                        // Add cache-busting parameter to ensure latest file is loaded
+                        const fileUrl = assignmentApi.getFileUrl(assignment.attachmentPath);
+                        const urlWithCacheBust = `${fileUrl}?t=${Date.now()}`;
+                        window.open(urlWithCacheBust, '_blank');
                       }
                     }}
                     className="flex-shrink-0"
@@ -615,9 +720,23 @@ export function AssignmentDetailView() {
         {/* File Preview Dialog */}
         {hasSubmission && assignment.userSubmission && (
           <FilePreview
-            open={isPreviewOpen}
+            open={isPreviewOpen && !previewAttachment}
             onOpenChange={setIsPreviewOpen}
-            submission={assignment.userSubmission}
+            source={{ type: 'submission', data: assignment.userSubmission }}
+          />
+        )}
+
+        {/* Attachment Preview Dialog */}
+        {previewAttachment && (
+          <FilePreview
+            open={isPreviewOpen}
+            onOpenChange={(open) => {
+              setIsPreviewOpen(open);
+              if (!open) {
+                setPreviewAttachment(null);
+              }
+            }}
+            source={{ type: 'attachment', data: previewAttachment }}
           />
         )}
 
@@ -636,31 +755,31 @@ export function AssignmentDetailView() {
     <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-        <Button
-          variant="outline"
-          size="sm"
+        <button
           onClick={() => navigate(`/club/${clubId}/assignments`)}
-          className="w-full sm:w-auto"
+          className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all cursor-pointer disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 has-[>svg]:px-3"
         >
-          <ArrowLeft className="h-4 w-4 mr-2" />
+          <ArrowLeft className="h-4 w-4" />
           Back
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsEditDialogOpen(true)}
-          className="w-full sm:w-auto"
-        >
-          <Edit className="h-4 w-4 mr-2" />
-          Edit Assignment
-        </Button>
+        </button>
       </div>
 
       {/* Assignment Info */}
       <Card>
         <CardHeader className="@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 pt-4 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl font-bold">{assignment.title}</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-2xl font-bold">{assignment.title}</CardTitle>
+              {isLeader && (
+                <div className="flex-shrink-0" data-slot="card">
+                  {assignment.isVisible !== false ? (
+                    <Eye className="h-5 w-5 text-muted-foreground" />
+                  ) : (
+                    <EyeOff className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+              )}
+            </div>
             {getAssignmentStatusBadge()}
           </div>
         </CardHeader>
@@ -683,7 +802,52 @@ export function AssignmentDetailView() {
               <p className="text-base font-semibold text-muted-foreground whitespace-pre-wrap">{assignment.description}</p>
             </div>
           )}
-          {assignment.attachmentPath && assignment.attachmentName && (
+          {/* Multiple Attachments */}
+          {assignment.attachments && assignment.attachments.length > 0 && (
+            <div className="pt-4 border-t">
+              <h3 className="text-base font-bold mb-2">Attachments</h3>
+              <div className="space-y-2">
+                {assignment.attachments.map((attachment) => (
+                  <div key={attachment.id} className="flex items-center gap-2 p-3 bg-muted rounded-md">
+                    <FileText className="h-5 w-5 flex-shrink-0" />
+                    <span className="text-sm flex-1 truncate min-w-0" title={attachment.fileName}>{attachment.fileName}</span>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setPreviewAttachment(attachment);
+                          setIsPreviewOpen(true);
+                        }}
+                        className="p-2 sm:px-3 sm:py-2"
+                        aria-label="Preview file"
+                      >
+                        <Eye className="h-4 w-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Preview</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          // Add cache-busting parameter to ensure latest file is loaded
+                          const fileUrl = assignmentApi.getFileUrl(attachment.filePath);
+                          const urlWithCacheBust = `${fileUrl}?t=${Date.now()}`;
+                          window.open(urlWithCacheBust, '_blank');
+                        }}
+                        className="p-2 sm:px-3 sm:py-2"
+                        aria-label="Download file"
+                      >
+                        <Download className="h-4 w-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Download</span>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Legacy single attachment support */}
+          {(!assignment.attachments || assignment.attachments.length === 0) && assignment.attachmentPath && assignment.attachmentName && (
             <div className="pt-4 border-t">
               <h3 className="text-base font-bold mb-2">Attachment</h3>
               <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
@@ -694,7 +858,10 @@ export function AssignmentDetailView() {
                   size="sm"
                   onClick={() => {
                     if (assignment.attachmentPath) {
-                      window.open(assignmentApi.getFileUrl(assignment.attachmentPath), '_blank');
+                      // Add cache-busting parameter to ensure latest file is loaded
+                      const fileUrl = assignmentApi.getFileUrl(assignment.attachmentPath);
+                      const urlWithCacheBust = `${fileUrl}?t=${Date.now()}`;
+                      window.open(urlWithCacheBust, '_blank');
                     }
                   }}
                   className="flex-shrink-0"
@@ -883,6 +1050,20 @@ export function AssignmentDetailView() {
           fetchMembersWithSubmissions();
         }}
       />
+
+      {/* Attachment Preview Dialog */}
+      {previewAttachment && (
+        <FilePreview
+          open={isPreviewOpen}
+          onOpenChange={(open) => {
+            setIsPreviewOpen(open);
+            if (!open) {
+              setPreviewAttachment(null);
+            }
+          }}
+          source={{ type: 'attachment', data: previewAttachment }}
+        />
+      )}
 
       {/* Comments Section */}
       {assignment && <AssignmentComments assignmentId={assignment.id} />}
