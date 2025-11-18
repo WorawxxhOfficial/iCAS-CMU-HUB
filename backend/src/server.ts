@@ -11,6 +11,7 @@ import checkinRouter from './features/checkin/routes/checkin';
 import clubRouter from './features/club/routes/club';
 import eventRouter from './features/event/routes/event';
 import assignmentRouter from './features/assignment/routes/assignment';
+import documentRouter from './features/smart-document/routes/document';
 import { initializeSocketIO } from './websocket/socketServer';
 import path from 'path';
 
@@ -70,6 +71,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Serve static files for documents (templates)
+app.use('/documents', express.static(path.join(__dirname, '../documents')));
 
 // Routes
 app.use('/api/health', healthRouter);
@@ -77,6 +80,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/checkin', checkinRouter);
 app.use('/api/clubs', assignmentRouter); // Must be before clubRouter to match /clubs/:clubId/assignments
 app.use('/api/clubs', clubRouter);
+app.use('/api/clubs', documentRouter); // Must be after clubRouter to match /clubs/:clubId/documents
 app.use('/api/events', eventRouter);
 
 // Serve React app static files in production
