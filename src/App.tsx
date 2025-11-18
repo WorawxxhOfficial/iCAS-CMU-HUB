@@ -1,5 +1,5 @@
-import React, { useState, createContext, useContext, useEffect, useCallback } from "react";
-import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import React, { useState, createContext, useContext, useEffect } from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { LoginHub } from "./components/LoginHub";
 import { AppSidebar } from "./components/AppSidebar";
 import { SidebarProvider } from "./components/ui/sidebar";
@@ -7,7 +7,6 @@ import { useIsMobile } from "./components/ui/use-mobile";
 import { DashboardView } from "./components/DashboardView";
 import { CalendarView } from "./components/CalendarView";
 import { BudgetManagementView } from "./components/BudgetManagementView";
-import { ClubManagementView } from "./components/ClubManagementView";
 import { ClubLeaderView } from "./components/ClubLeaderView";
 import { JoinClubsView } from "./components/JoinClubsView";
 import { ReportView } from "./components/ReportView";
@@ -127,7 +126,6 @@ function SidebarProtectedRoute({ children, path }: { children?: React.ReactNode;
 function AppLayout() {
   const { user, setUser } = useUser();
   const isMobile = useIsMobile();
-  const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
   
