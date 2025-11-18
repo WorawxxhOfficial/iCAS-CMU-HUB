@@ -55,6 +55,14 @@ jobs:
           JWT_SECRET: test_jwt_secret_for_ci
           JWT_REFRESH_SECRET: test_refresh_secret_for_ci
           NODE_ENV: test
+          # SMTP credentials for testing
+          SMTP_HOST: smtp.gmail.com
+          SMTP_PORT: 587
+          SMTP_USER: ${{ secrets.SMTP_USER || 'test@example.com' }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          # LINE Bot credentials for testing
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
         run: npm run test:ci
       
       - name: Upload coverage to Codecov
