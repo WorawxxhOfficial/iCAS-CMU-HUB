@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Input } from "../ui/input";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog";
 import { 
   ClipboardList, 
   Search, 
@@ -16,6 +17,8 @@ import {
   Edit,
   Trash2,
   X,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useClub } from "../../contexts/ClubContext";
@@ -57,6 +60,9 @@ export function ClubAssignmentsView() {
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
   const [isSubmissionsViewOpen, setIsSubmissionsViewOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [assignmentToDelete, setAssignmentToDelete] = useState<{ id: number; title: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const isLeader = user?.role === 'leader' || user?.role === 'admin';
 
@@ -70,7 +76,6 @@ export function ClubAssignmentsView() {
     try {
       setIsLoading(true);
       const data = await assignmentApi.getClubAssignments(clubId);
-      setAssignments(data);
       
       // For leaders, recategorize assignments based on dates only (ignore submission status)
       if (isLeader) {
@@ -122,13 +127,29 @@ export function ClubAssignmentsView() {
           }
         });
         
+        // Set both assignments and displayAssignments for leaders
+        setAssignments(recategorized);
         setDisplayAssignments(recategorized);
       } else {
+        setAssignments(data);
         setDisplayAssignments(data);
       }
     } catch (error: any) {
       console.error('Error fetching assignments:', error);
       toast.error(error.response?.data?.message || 'Failed to fetch assignments');
+      // Reset assignments on error
+      setAssignments({
+        current: [],
+        upcoming: [],
+        overdue: [],
+        past: [],
+      });
+      setDisplayAssignments({
+        current: [],
+        upcoming: [],
+        overdue: [],
+        past: [],
+      });
     } finally {
       setIsLoading(false);
     }
@@ -289,7 +310,9 @@ export function ClubAssignmentsView() {
           id: freshAssignment.id,
           attachmentPath: freshAssignment.attachmentPath,
           attachmentName: freshAssignment.attachmentName,
-          attachmentMimeType: freshAssignment.attachmentMimeType
+          attachmentMimeType: freshAssignment.attachmentMimeType,
+          attachments: freshAssignment.attachments,
+          attachmentsCount: freshAssignment.attachments?.length || 0
         });
         setSelectedAssignment(freshAssignment);
         setIsEditDialogOpen(true);
@@ -305,20 +328,36 @@ export function ClubAssignmentsView() {
     }
   };
 
-  const handleEditSuccess = async () => {
+  const handleEditSuccess = async (updatedAssignmentFromResponse?: Assignment) => {
     // Refresh assignments list
     await fetchAssignments();
     
-    // If we have a selected assignment, fetch the updated assignment with attachment data
-    if (selectedAssignment && clubId) {
+    // Use the updated assignment from the response if provided, otherwise fetch it
+    if (updatedAssignmentFromResponse) {
+      console.log('Using updated assignment from response:', {
+        id: updatedAssignmentFromResponse.id,
+        attachmentPath: updatedAssignmentFromResponse.attachmentPath,
+        attachmentName: updatedAssignmentFromResponse.attachmentName,
+        attachmentMimeType: updatedAssignmentFromResponse.attachmentMimeType,
+        attachments: updatedAssignmentFromResponse.attachments,
+        attachmentsCount: updatedAssignmentFromResponse.attachments?.length || 0
+      });
+      setSelectedAssignment(updatedAssignmentFromResponse);
+    } else if (selectedAssignment && clubId) {
+      // Fallback: fetch if not provided in response
       try {
+        // Wait a bit for backend to process the file upload
+        await new Promise(resolve => setTimeout(resolve, 500));
         console.log('Fetching updated assignment after edit...', selectedAssignment.id);
-        const updatedAssignment = await assignmentApi.getAssignment(clubId, selectedAssignment.id);
+        // Add cache-busting parameter to ensure we get fresh data
+        const updatedAssignment = await assignmentApi.getAssignment(clubId, selectedAssignment.id, true);
         console.log('Updated assignment data:', {
           id: updatedAssignment.id,
           attachmentPath: updatedAssignment.attachmentPath,
           attachmentName: updatedAssignment.attachmentName,
-          attachmentMimeType: updatedAssignment.attachmentMimeType
+          attachmentMimeType: updatedAssignment.attachmentMimeType,
+          attachments: updatedAssignment.attachments,
+          attachmentsCount: updatedAssignment.attachments?.length || 0
         });
         setSelectedAssignment(updatedAssignment);
       } catch (error) {
@@ -335,17 +374,35 @@ export function ClubAssignmentsView() {
     
     if (!clubId) return;
 
-    if (!confirm('Are you sure you want to delete this assignment? This action cannot be undone.')) {
-      return;
+    // Find the assignment to show its title in the dialog
+    const assignment = [
+      ...assignments.current,
+      ...assignments.upcoming,
+      ...assignments.overdue,
+      ...assignments.past
+    ].find(a => a.id === assignmentId);
+
+    if (assignment) {
+      setAssignmentToDelete({ id: assignmentId, title: assignment.title });
+      setIsDeleteDialogOpen(true);
     }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!clubId || !assignmentToDelete) return;
 
     try {
-      await assignmentApi.deleteAssignment(clubId, assignmentId);
+      setIsDeleting(true);
+      await assignmentApi.deleteAssignment(clubId, assignmentToDelete.id);
       toast.success('Assignment deleted successfully');
+      setIsDeleteDialogOpen(false);
+      setAssignmentToDelete(null);
       fetchAssignments();
     } catch (error: any) {
       console.error('Error deleting assignment:', error);
       toast.error(error.response?.data?.message || 'Failed to delete assignment');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -475,9 +532,18 @@ export function ClubAssignmentsView() {
         onClick={() => navigate(`/club/${clubId}/assignment/${assignment.id}`)}
       >
         <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <CardTitle className="text-base truncate">{assignment.title}</CardTitle>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0 flex items-center gap-2" style={{ display: 'flex', alignItems: 'center' }}>
+              <CardTitle className="text-base truncate" style={{ display: 'inline-block', verticalAlign: 'middle' }}>{assignment.title}</CardTitle>
+              {isLeader && (
+                <span className="flex-shrink-0" data-slot="card" style={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }}>
+                  {assignment.isVisible !== false ? (
+                    <Eye className="h-4 w-4 text-muted-foreground" style={{ display: 'inline-block', verticalAlign: 'middle' }} />
+                  ) : (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" style={{ display: 'inline-block', verticalAlign: 'middle' }} />
+                  )}
+                </span>
+              )}
             </div>
             <Badge className={status.color}>
               {status.label}
@@ -516,12 +582,12 @@ export function ClubAssignmentsView() {
           )}
 
           {isLeader && (
-            <div className="flex flex-col sm:flex-row gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-row gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={(e) => handleEditAssignment(assignment, e)}
-                className="flex-1"
+                className="flex-1 h-8 sm:h-9"
               >
                 <Edit className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Edit</span>
@@ -530,7 +596,7 @@ export function ClubAssignmentsView() {
                 variant="outline"
                 size="sm"
                 onClick={(e) => handleDeleteAssignment(assignment.id, e)}
-                className="text-destructive hover:text-destructive flex-1 sm:flex-initial"
+                className="text-destructive hover:text-destructive flex-1 h-8 sm:h-9 sm:flex-initial"
               >
                 <Trash2 className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Delete</span>
@@ -579,7 +645,7 @@ export function ClubAssignmentsView() {
   return (
     <div className="p-4 md:p-8 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+      <div className="flex justify-between items-start">
         <div className="flex-1 min-w-0">
           <h1 className="mb-2 text-xl md:text-2xl font-bold">Assignments</h1>
           <p className="text-sm md:text-base text-muted-foreground">
@@ -589,8 +655,7 @@ export function ClubAssignmentsView() {
         {isLeader && (
           <Button 
             onClick={() => setIsCreateDialogOpen(true)}
-            className="w-full sm:w-auto"
-            size="sm"
+            className="w-auto touch-manipulation sm:h-8 sm:rounded-md sm:px-3 sm:gap-1.5"
           >
             <Plus className="h-4 w-4 mr-2" />
             Create Assignment
@@ -782,7 +847,7 @@ export function ClubAssignmentsView() {
          displayAssignments.past.length === 0 && (
         <Card>
           <CardContent className="py-8 text-center">
-            <ClipboardList className="h-12 w-12 mx-auto mb-2 opacity-50 text-muted-foreground" />
+            <ClipboardList className="h-12 w-12 mx-auto mt-6 mb-2 opacity-50 text-muted-foreground" />
             <p className="text-muted-foreground">No assignments found</p>
           </CardContent>
         </Card>
@@ -824,6 +889,47 @@ export function ClubAssignmentsView() {
           )}
             </>
           )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader className="text-left">
+            <AlertDialogTitle className="text-left">Delete Assignment</AlertDialogTitle>
+            <AlertDialogDescription className="text-left">
+              Are you sure you want to delete "{assignmentToDelete?.title}"? This action cannot be undone and will permanently delete the assignment and all associated submissions.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row gap-2 sm:gap-2">
+            <AlertDialogCancel 
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setAssignmentToDelete(null);
+              }}
+              disabled={isDeleting}
+              className="flex-1 h-10 sm:h-9"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-destructive text-white hover:bg-destructive/90 flex-1 h-10 sm:h-9"
+            >
+              {isDeleting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Assignment
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

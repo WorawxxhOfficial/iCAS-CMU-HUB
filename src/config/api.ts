@@ -25,9 +25,9 @@ const API_URL = inferApiUrl();
 
 export const api = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  // Don't set Content-Type header here - let axios set it automatically
+  // For JSON requests, axios will set 'application/json'
+  // For FormData requests, axios will set 'multipart/form-data' with boundary
   withCredentials: true, // Send cookies with requests
   timeout: 10000, // 10 second timeout for all requests (increased for email sending)
 });

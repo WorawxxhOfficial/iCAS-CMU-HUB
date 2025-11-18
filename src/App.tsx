@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import { WebSocketProvider, useWebSocket } from "./contexts/WebSocketContext";
 import { useAuth } from "./features/auth/hooks/useAuth";
 import { getMenuItemsForRole } from "./components/AppSidebar";
+import { useScrollPreservation } from "./hooks/useScrollPreservation";
 
 export type UserRole = "member" | "leader" | "admin";
 
@@ -129,6 +130,9 @@ function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
+  
+  // Preserve scroll position when switching applications
+  useScrollPreservation();
 
   const handleLogout = async () => {
     await logout();

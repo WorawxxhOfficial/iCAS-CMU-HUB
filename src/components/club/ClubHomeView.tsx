@@ -142,7 +142,7 @@ export function ClubHomeView() {
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center gap-4 justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-6">
               <Avatar className="h-16 w-16">
                 <AvatarImage src={club.logo} />
                 <AvatarFallback>{club.name.substring(0, 2)}</AvatarFallback>
@@ -217,7 +217,7 @@ export function ClubHomeView() {
                 onChange={setContent}
                 editable={true}
               />
-              <div className="flex flex-col sm:flex-row gap-2 mt-4">
+              <div className="flex flex-col sm:flex-row gap-6 mt-4">
                 <Button onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto">
                   {isSaving ? 'Saving...' : 'Save Changes'}
                 </Button>
@@ -232,7 +232,7 @@ export function ClubHomeView() {
                 <RichTextEditor content={content} editable={false} />
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <FileText className="h-12 w-12 mx-auto mt-4 opacity-50" />
                   <p>No announcements yet</p>
                   {isLeaderOrAdmin && (
                     <p className="text-sm mt-2">Click Edit to add announcements</p>

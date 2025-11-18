@@ -5,7 +5,8 @@ import {
   getAssignment,
   createAssignment,
   updateAssignment,
-  deleteAssignment
+  deleteAssignment,
+  deleteAttachment
 } from '../controllers/assignmentController';
 import {
   submitAssignment,
@@ -18,7 +19,8 @@ import {
   getAssignmentComments,
   createComment,
   updateComment,
-  deleteComment
+  deleteComment,
+  toggleCommentVisibility
 } from '../controllers/commentController';
 import {
   requireLeaderOrAdmin,
@@ -36,17 +38,40 @@ router.use(authenticate);
 // Get all assignments for a club (categorized)
 router.get('/:clubId/assignments', requireClubMember, getClubAssignments);
 
-// Create a new assignment (leader only) - supports file upload
-router.post('/:clubId/assignments', requireLeaderOrAdmin, upload.single('attachment'), createAssignment);
+// Create a new assignment (leader only) - supports multiple file uploads
+router.post('/:clubId/assignments', requireLeaderOrAdmin, upload.array('attachments', 10), createAssignment);
 
 // Get a specific assignment
 router.get('/:clubId/assignments/:assignmentId', requireClubMember, validateAssignmentAccess, getAssignment);
 
-// Update an assignment (leader only) - supports file upload
-router.put('/:clubId/assignments/:assignmentId', requireLeaderOrAdmin, validateAssignmentAccess, upload.single('attachment'), updateAssignment);
+// Update an assignment (leader only) - supports multiple file uploads
+// Multer error handling: errors are passed to next() and handled by error middleware
+router.put('/:clubId/assignments/:assignmentId', 
+  requireLeaderOrAdmin, 
+  validateAssignmentAccess, 
+  (req, res, next) => {
+    console.log('Multer middleware - before upload.array');
+    console.log('Multer middleware - Content-Type:', req.headers['content-type']);
+    upload.array('attachments', 10)(req, res, (err) => {
+      if (err) {
+        console.error('Multer error:', err);
+        console.error('Multer error message:', err.message);
+        console.error('Multer error code:', (err as any).code);
+        return next(err);
+      }
+      console.log('Multer middleware - files processed successfully');
+      console.log('Multer middleware - req.files:', req.files);
+      next();
+    });
+  },
+  updateAssignment
+);
 
 // Delete an assignment (leader only)
 router.delete('/:clubId/assignments/:assignmentId', requireLeaderOrAdmin, validateAssignmentAccess, deleteAssignment);
+
+// Delete a single attachment (leader only)
+router.delete('/:clubId/assignments/:assignmentId/attachments/:attachmentId', requireLeaderOrAdmin, validateAssignmentAccess, deleteAttachment);
 
 // Submission routes (assignment-level)
 // Submit an assignment (member) - supports both text and file
@@ -121,6 +146,14 @@ router.delete(
   requireClubMember,
   validateAssignmentAccess,
   deleteComment
+);
+
+// Hide/Unhide a comment (leader only)
+router.patch(
+  '/:clubId/assignments/:assignmentId/comments/:commentId/visibility',
+  requireLeaderOrAdmin,
+  validateAssignmentAccess,
+  toggleCommentVisibility
 );
 
 export default router;

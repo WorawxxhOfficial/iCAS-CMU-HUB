@@ -1,5 +1,16 @@
 import api from '../../../config/api';
 
+export interface AssignmentAttachment {
+  id: number;
+  assignmentId: number;
+  filePath: string;
+  fileName: string;
+  fileMimeType?: string;
+  fileSize?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Assignment {
   id: number;
   clubId: number;
@@ -8,9 +19,13 @@ export interface Assignment {
   maxScore?: number;
   availableDate: string;
   dueDate: string;
+  isVisible?: boolean;
+  // Legacy fields for backward compatibility
   attachmentPath?: string;
   attachmentName?: string;
   attachmentMimeType?: string;
+  // New multiple attachments support
+  attachments?: AssignmentAttachment[];
   createdBy: number;
   creatorFirstName?: string;
   creatorLastName?: string;
@@ -65,6 +80,7 @@ export interface UpdateAssignmentRequest {
   maxScore?: number;
   availableDate?: string;
   dueDate?: string;
+  isVisible?: boolean;
 }
 
 export interface GradeSubmissionRequest {
@@ -80,28 +96,29 @@ export const assignmentApi = {
   },
 
   // Get a single assignment
-  getAssignment: async (clubId: number, assignmentId: number): Promise<Assignment> => {
-    const response = await api.get(`/clubs/${clubId}/assignments/${assignmentId}`);
+  getAssignment: async (clubId: number, assignmentId: number, cacheBust?: boolean): Promise<Assignment> => {
+    const url = `/clubs/${clubId}/assignments/${assignmentId}`;
+    const finalUrl = cacheBust ? `${url}?t=${Date.now()}` : url;
+    const response = await api.get(finalUrl);
     return response.data.assignment;
   },
 
   // Create a new assignment (leader only)
-  createAssignment: async (clubId: number, data: CreateAssignmentRequest, attachmentFile?: File): Promise<Assignment> => {
+  createAssignment: async (clubId: number, data: CreateAssignmentRequest, attachmentFiles?: File[]): Promise<Assignment> => {
     const formData = new FormData();
     formData.append('title', data.title);
     if (data.description) formData.append('description', data.description);
     if (data.maxScore !== undefined) formData.append('maxScore', data.maxScore.toString());
     formData.append('availableDate', data.availableDate);
     formData.append('dueDate', data.dueDate);
-    if (attachmentFile) {
-      formData.append('attachment', attachmentFile);
+    if (attachmentFiles && attachmentFiles.length > 0) {
+      attachmentFiles.forEach(file => {
+        formData.append('attachments', file);
+      });
     }
 
-    const response = await api.post(`/clubs/${clubId}/assignments`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    // Don't set Content-Type header - let axios set it automatically with the correct boundary
+    const response = await api.post(`/clubs/${clubId}/assignments`, formData);
     return response.data.assignment;
   },
 
@@ -110,8 +127,7 @@ export const assignmentApi = {
     clubId: number,
     assignmentId: number,
     data: UpdateAssignmentRequest,
-    attachmentFile?: File | null,
-    removeAttachment?: boolean
+    attachmentFiles?: File[] | null
   ): Promise<Assignment> => {
     const formData = new FormData();
     // Always append fields that are defined (even if empty string for description)
@@ -127,15 +143,17 @@ export const assignmentApi = {
     if (data.availableDate !== undefined && data.availableDate !== null && data.availableDate !== '') {
       formData.append('availableDate', data.availableDate);
     }
-    if (data.dueDate !== undefined && data.dueDate !== null && data.dueDate !== '') {
-      formData.append('dueDate', data.dueDate);
-    }
-    if (removeAttachment) {
-      formData.append('removeAttachment', 'true');
-    }
-    if (attachmentFile) {
-      formData.append('attachment', attachmentFile);
-    }
+      if (data.dueDate !== undefined && data.dueDate !== null && data.dueDate !== '') {
+        formData.append('dueDate', data.dueDate);
+      }
+      if (data.isVisible !== undefined && data.isVisible !== null) {
+        formData.append('isVisible', data.isVisible.toString());
+      }
+      if (attachmentFiles && attachmentFiles.length > 0) {
+        attachmentFiles.forEach(file => {
+          formData.append('attachments', file);
+        });
+      }
     
     console.log('FormData entries:');
     for (const [key, value] of formData.entries()) {
@@ -143,8 +161,38 @@ export const assignmentApi = {
     }
 
     // Don't set Content-Type header - let axios set it automatically with the correct boundary
-    const response = await api.put(`/clubs/${clubId}/assignments/${assignmentId}`, formData);
+    console.log('updateAssignment - About to send PUT request to:', `/clubs/${clubId}/assignments/${assignmentId}`);
+    console.log('updateAssignment - FormData has', Array.from(formData.entries()).length, 'entries');
+    
+    try {
+      const response = await api.put(`/clubs/${clubId}/assignments/${assignmentId}`, formData);
+      console.log('updateAssignment - PUT request completed successfully');
+      console.log('updateAssignment API response:', {
+      success: response.data.success,
+      message: response.data.message,
+      assignment: response.data.assignment,
+      assignmentAttachments: response.data.assignment?.attachments,
+      assignmentAttachmentsCount: response.data.assignment?.attachments?.length || 0
+    });
     return response.data.assignment;
+    } catch (error: any) {
+      console.error('updateAssignment - PUT request failed:', error);
+      console.error('updateAssignment - Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      throw error;
+    }
+  },
+
+  // Delete a single attachment (leader only)
+  deleteAttachment: async (
+    clubId: number,
+    assignmentId: number,
+    attachmentId: number
+  ): Promise<void> => {
+    await api.delete(`/clubs/${clubId}/assignments/${assignmentId}/attachments/${attachmentId}`);
   },
 
   // Delete an assignment (leader only)
@@ -267,6 +315,19 @@ export const assignmentApi = {
   ): Promise<void> => {
     await api.delete(`/clubs/${clubId}/assignments/${assignmentId}/comments/${commentId}`);
   },
+
+  hideComment: async (
+    clubId: number,
+    assignmentId: number,
+    commentId: number,
+    isHidden: boolean
+  ): Promise<AssignmentComment> => {
+    const response = await api.patch(
+      `/clubs/${clubId}/assignments/${assignmentId}/comments/${commentId}/visibility`,
+      { isHidden }
+    );
+    return response.data.comment;
+  },
 };
 
 export interface AssignmentComment {
@@ -275,6 +336,7 @@ export interface AssignmentComment {
   userId: number;
   commentText: string;
   parentCommentId?: number;
+  isHidden?: boolean;
   createdAt: string;
   updatedAt: string;
   userFirstName?: string;

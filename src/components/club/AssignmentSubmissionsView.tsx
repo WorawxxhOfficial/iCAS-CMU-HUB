@@ -389,7 +389,7 @@ export function AssignmentSubmissionsView({
           <FilePreview
             open={isPreviewOpen}
             onOpenChange={setIsPreviewOpen}
-            submission={selectedSubmission}
+            source={{ type: 'submission', data: selectedSubmission }}
           />
         </>
       )}

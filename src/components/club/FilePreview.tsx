@@ -1,133 +1,261 @@
-import React from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { assignmentApi, AssignmentSubmission } from "../../features/assignment/api/assignmentApi";
-import { Download, FileText, ExternalLink } from "lucide-react";
+import { assignmentApi, AssignmentSubmission, AssignmentAttachment } from "../../features/assignment/api/assignmentApi";
+import { Download, ExternalLink } from "lucide-react";
+import { useFilePreviewDialog } from "../../hooks/useFilePreviewDialog";
+import { getFileType, getFileTypeInfo, formatFileSize, canPreview } from "../../utils/fileUtils";
+import { PdfPreview } from "./file-preview/PdfPreview";
+import { ImagePreview } from "./file-preview/ImagePreview";
+import { TextPreview } from "./file-preview/TextPreview";
+import { UnsupportedPreview } from "./file-preview/UnsupportedPreview";
+import { LoadingPreview } from "./file-preview/LoadingPreview";
+import { ErrorPreview } from "./file-preview/ErrorPreview";
+
+// Unified interface for file preview sources
+export type FilePreviewSource = 
+  | { type: 'submission'; data: AssignmentSubmission }
+  | { type: 'attachment'; data: AssignmentAttachment };
 
 interface FilePreviewProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  submission: AssignmentSubmission;
+  source: FilePreviewSource;
 }
 
-export function FilePreview({ open, onOpenChange, submission }: FilePreviewProps) {
-  const fileUrl = submission.filePath ? assignmentApi.getFileUrl(submission.filePath) : null;
-  const isPdf = submission.fileMimeType?.includes('pdf');
-  const isText = submission.submissionType === 'text';
-  const isImage = submission.fileMimeType?.startsWith('image/');
+export function FilePreview({ open, onOpenChange, source }: FilePreviewProps) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Extract file information based on source type
+  const fileInfo = useMemo(() => {
+    if (source.type === 'submission') {
+      const submission = source.data;
+      return {
+        fileUrl: submission.filePath ? assignmentApi.getFileUrl(submission.filePath) : null,
+        fileName: submission.fileName,
+        fileMimeType: submission.fileMimeType,
+        fileSize: submission.fileSize,
+        isText: submission.submissionType === 'text',
+        textContent: submission.textContent,
+        userFirstName: submission.userFirstName,
+        userLastName: submission.userLastName,
+      };
+    } else {
+      const attachment = source.data;
+      return {
+        fileUrl: assignmentApi.getFileUrl(attachment.filePath),
+        fileName: attachment.fileName,
+        fileMimeType: attachment.fileMimeType,
+        fileSize: attachment.fileSize,
+        isText: false,
+        textContent: undefined,
+        userFirstName: undefined,
+        userLastName: undefined,
+      };
+    }
+  }, [source]);
+
+  const fileType = useMemo(() => getFileType(fileInfo.fileMimeType), [fileInfo.fileMimeType]);
+  const fileTypeInfo = useMemo(() => getFileTypeInfo(fileInfo.fileMimeType), [fileInfo.fileMimeType]);
+  const canPreviewFile = useMemo(() => {
+    if (fileInfo.isText) return true;
+    return canPreview(fileInfo.fileMimeType);
+  }, [fileInfo.isText, fileInfo.fileMimeType]);
+
+  // Dialog interaction handlers
+  const { handleOpenChange, handleInteractOutside, handlePointerDownOutside, handleClose } = 
+    useFilePreviewDialog(open, onOpenChange, {
+      onClose: () => {
+        setIsLoading(false);
+        setError(null);
+        setIsFullscreen(false);
+      }
+    });
+
+  // Reset loading state when dialog opens or source changes
+  useEffect(() => {
+    if (open) {
+      setIsLoading(false);
+      setError(null);
+    }
+  }, [open, source]);
+
+  // Handle download
+  const handleDownload = useCallback(() => {
+    if (!fileInfo.fileUrl) return;
+    
+    const link = document.createElement('a');
+    link.href = fileInfo.fileUrl;
+    link.download = fileInfo.fileName || 'file';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [fileInfo.fileUrl, fileInfo.fileName]);
+
+  // Handle open in new tab
+  const handleOpenInTab = useCallback(() => {
+    if (fileInfo.fileUrl) {
+      window.open(fileInfo.fileUrl, '_blank');
+    }
+  }, [fileInfo.fileUrl]);
+
+  // Handle fullscreen
+  const handleFullscreen = useCallback(() => {
+    setIsFullscreen(true);
+    // TODO: Implement fullscreen mode
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // ESC is handled by Dialog component
+      // Add other shortcuts here if needed
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open, handleClose]);
+
+  // Render preview content
+  const renderPreview = () => {
+    // Text submission - no loading state needed
+    if (fileInfo.isText && fileInfo.textContent) {
+      return <TextPreview content={fileInfo.textContent} fileName={fileInfo.fileName} />;
+    }
+
+    // PDF preview - handles its own loading state
+    if (fileType === 'pdf' && fileInfo.fileUrl) {
+      return (
+        <PdfPreview
+          fileUrl={fileInfo.fileUrl}
+          fileName={fileInfo.fileName}
+          onFullscreen={handleFullscreen}
+        />
+      );
+    }
+
+    // Image preview - handles its own loading state
+    if (fileType === 'image' && fileInfo.fileUrl) {
+      return (
+        <ImagePreview
+          fileUrl={fileInfo.fileUrl}
+          fileName={fileInfo.fileName}
+          onFullscreen={handleFullscreen}
+        />
+      );
+    }
+
+    // Unsupported file type
+    return (
+      <UnsupportedPreview
+        fileName={fileInfo.fileName}
+        fileUrl={fileInfo.fileUrl}
+        onDownload={handleDownload}
+      />
+    );
+  };
+
+  // Get dialog title
+  const getDialogTitle = () => {
+    if (fileInfo.isText) {
+      return 'Text Submission';
+    }
+    return 'File Preview';
+  };
+
+  // Get dialog description
+  const getDialogDescription = () => {
+    if (fileInfo.isText) {
+      const name = fileInfo.userFirstName || fileInfo.userLastName
+        ? `${fileInfo.userFirstName || ''} ${fileInfo.userLastName || ''}`.trim()
+        : 'User';
+      return `Submission by ${name}`;
+    }
+    return fileInfo.fileName || 'File preview';
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+    <Dialog 
+      open={open} 
+      modal={true}
+      onOpenChange={handleOpenChange}
+    >
+      <DialogContent 
+        className="max-w-[95vw] sm:max-w-7xl max-h-[95vh] overflow-hidden flex flex-col w-[95vw] sm:w-full"
+        onInteractOutside={handleInteractOutside}
+        onPointerDownOutside={handlePointerDownOutside}
+        onEscapeKeyDown={() => {
+          // Allow ESC to close
+          handleClose();
+        }}
+        aria-describedby="file-preview-description"
+      >
         <DialogHeader>
-          <DialogTitle>
-            {isText ? 'Text Submission' : 'File Preview'}
+          <DialogTitle id="file-preview-title">
+            {getDialogTitle()}
           </DialogTitle>
-          <DialogDescription>
-            {isText 
-              ? `Submission by ${submission.userFirstName} ${submission.userLastName}`
-              : submission.fileName || 'File submission'
-            }
+          <DialogDescription id="file-preview-description">
+            {getDialogDescription()}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-auto">
-          {/* Text Submission */}
-          {isText && submission.textContent && (
-            <div className="p-6 bg-muted rounded-lg">
-              <div 
-                className="prose prose-sm md:prose-base max-w-none"
-                dangerouslySetInnerHTML={{ __html: submission.textContent }}
-              />
-            </div>
-          )}
-
-          {/* PDF Preview */}
-          {!isText && isPdf && fileUrl && (
-            <div className="h-[70vh]">
-              <iframe
-                src={fileUrl}
-                className="w-full h-full border rounded-lg"
-                title="PDF Preview"
-              />
-            </div>
-          )}
-
-          {/* Image Preview */}
-          {!isText && isImage && fileUrl && (
-            <div className="flex items-center justify-center p-6">
-              <img
-                src={fileUrl}
-                alt={submission.fileName || 'Image preview'}
-                className="max-w-full max-h-[70vh] object-contain rounded-lg border"
-              />
-            </div>
-          )}
-
-          {/* Non-PDF, Non-Image File */}
-          {!isText && !isPdf && !isImage && (
-            <div className="py-12 text-center">
-              <FileText className="h-16 w-16 mx-auto mb-4 opacity-50 text-muted-foreground" />
-              <p className="text-muted-foreground mb-4">
-                Preview not available for this file type
-              </p>
-              <p className="text-sm text-muted-foreground mb-6">
-                File: {submission.fileName}
-              </p>
-              {fileUrl && (
-                <div className="flex gap-2 justify-center">
-                  <Button
-                    variant="outline"
-                    onClick={() => window.open(fileUrl, '_blank')}
-                  >
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Open in New Tab
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      const link = document.createElement('a');
-                      link.href = fileUrl;
-                      link.download = submission.fileName || 'file';
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    }}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
+        <div 
+          className="flex-1 overflow-hidden min-h-0 flex flex-col"
+          role="region"
+          aria-label="File preview content"
+          style={{ minHeight: '400px' }}
+        >
+          {renderPreview()}
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between pt-4 border-t">
-          <div className="text-sm text-muted-foreground">
-            {submission.fileSize && (
-              <span>Size: {(submission.fileSize / 1024 / 1024).toFixed(2)} MB</span>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center pt-4 border-t shrink-0 gap-2 sm:gap-0">
+          <div className="text-xs sm:text-sm text-muted-foreground flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 sm:flex-1">
+            {fileInfo.fileSize && (
+              <span>Size: {formatFileSize(fileInfo.fileSize)}</span>
+            )}
+            {fileInfo.fileMimeType && (
+              <span>Type: {fileTypeInfo.label}</span>
             )}
           </div>
-          <div className="flex gap-2">
-            {!isText && fileUrl && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const link = document.createElement('a');
-                  link.href = fileUrl;
-                  link.download = submission.fileName || 'file';
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                }}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Download
-              </Button>
+          <div className="flex gap-2 w-full sm:w-auto sm:justify-end">
+            {!fileInfo.isText && fileInfo.fileUrl && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenInTab}
+                  aria-label="Open in new tab"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open in Tab
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownload}
+                  aria-label="Download file"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </Button>
+              </>
             )}
-            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleClose}
+              aria-label="Close dialog"
+            >
               Close
             </Button>
           </div>
@@ -137,3 +265,36 @@ export function FilePreview({ open, onOpenChange, submission }: FilePreviewProps
   );
 }
 
+// Convenience wrapper for submission preview (backward compatibility)
+interface SubmissionPreviewProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  submission: AssignmentSubmission;
+}
+
+export function SubmissionPreview({ open, onOpenChange, submission }: SubmissionPreviewProps) {
+  return (
+    <FilePreview
+      open={open}
+      onOpenChange={onOpenChange}
+      source={{ type: 'submission', data: submission }}
+    />
+  );
+}
+
+// Convenience wrapper for attachment preview
+interface AttachmentPreviewProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  attachment: AssignmentAttachment;
+}
+
+export function AttachmentPreview({ open, onOpenChange, attachment }: AttachmentPreviewProps) {
+  return (
+    <FilePreview
+      open={open}
+      onOpenChange={onOpenChange}
+      source={{ type: 'attachment', data: attachment }}
+    />
+  );
+}

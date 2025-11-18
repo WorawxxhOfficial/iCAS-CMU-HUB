@@ -1,23 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Label } from "../ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Checkbox } from "../ui/checkbox";
 import { Alert, AlertDescription } from "../ui/alert";
 import { toast } from "sonner";
 import { useClub } from "../../contexts/ClubContext";
 import { assignmentApi, Assignment, UpdateAssignmentRequest } from "../../features/assignment/api/assignmentApi";
-import { Calendar, FileText, Award, AlertTriangle, Upload, X, Info } from "lucide-react";
+import { Calendar, FileText, Award, AlertTriangle, Upload, X, Info, Eye, EyeOff } from "lucide-react";
 import { useRef } from "react";
 
 interface EditAssignmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   assignment: Assignment | null;
-  onSuccess: () => void;
+  onSuccess: (updatedAssignment?: Assignment) => void;
 }
 
 // Helper function to truncate file names
@@ -38,14 +39,15 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
     maxScore: undefined,
     availableDate: "",
     dueDate: "",
+    isVisible: true,
   });
   const [titleError, setTitleError] = useState(false);
   const [availableDateError, setAvailableDateError] = useState(false);
   const [dueDateError, setDueDateError] = useState(false);
   const [maxScoreError, setMaxScoreError] = useState(false);
   const [hasSubmissions, setHasSubmissions] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [removeAttachment, setRemoveAttachment] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDateChangeWarning, setShowDateChangeWarning] = useState(false);
   const [pendingSubmit, setPendingSubmit] = useState(false);
@@ -54,27 +56,33 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
   useEffect(() => {
     if (open && assignment) {
       console.log('EditAssignmentDialog: Loading assignment data', {
+        id: assignment.id,
         attachmentPath: assignment.attachmentPath,
         attachmentName: assignment.attachmentName,
-        attachmentMimeType: assignment.attachmentMimeType
+        attachmentMimeType: assignment.attachmentMimeType,
+        attachments: assignment.attachments,
+        attachmentsCount: assignment.attachments?.length || 0
       });
       
       // Convert MySQL DATETIME to datetime-local format
+      // MySQL DATETIME is stored as UTC, so we need to parse it as UTC and convert to local
       const convertToLocalDateTime = (dateString: string): string => {
         if (!dateString) return "";
         
-        // Parse MySQL DATETIME format: "YYYY-MM-DD HH:MM:SS"
+        // Parse MySQL DATETIME format: "YYYY-MM-DD HH:MM:SS" (stored as UTC)
         let date: Date;
         if (dateString.includes(' ')) {
           const [datePart, timePart] = dateString.split(' ');
           const [year, month, day] = datePart.split('-').map(Number);
           const [hours, minutes, seconds = 0] = timePart.split(':').map(Number);
-          // Create as local time
-          date = new Date(year, month - 1, day, hours, minutes, seconds);
+          // Parse as UTC (since that's how it's stored in the database)
+          date = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
         } else {
           date = new Date(dateString);
         }
         
+        // Convert UTC date to local time for datetime-local input
+        // datetime-local expects local time, not UTC
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
@@ -90,19 +98,14 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
         maxScore: assignment.maxScore ?? undefined,
         availableDate: convertToLocalDateTime(assignment.availableDate),
         dueDate: convertToLocalDateTime(assignment.dueDate),
+        isVisible: assignment.isVisible !== undefined ? assignment.isVisible : true,
       });
 
       // Check if assignment has submissions
       setHasSubmissions((assignment.submissionCount ?? 0) > 0);
       
-      // Reset file selection and remove attachment flag when dialog opens
-      // Only reset if there's no existing attachment (to preserve the display of current attachment)
-      setSelectedFile(null);
-      // Only reset removeAttachment if assignment doesn't have an attachment
-      // This ensures that if an attachment exists, it will be shown
-      if (!assignment.attachmentPath || !assignment.attachmentName) {
-        setRemoveAttachment(false);
-      }
+      // Reset file selection when dialog opens
+      setSelectedFiles([]);
     }
   }, [open, assignment]);
 
@@ -115,14 +118,14 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
         maxScore: undefined,
         availableDate: "",
         dueDate: "",
+        isVisible: true,
       });
       setTitleError(false);
       setAvailableDateError(false);
       setDueDateError(false);
       setMaxScoreError(false);
       setHasSubmissions(false);
-      setSelectedFile(null);
-      setRemoveAttachment(false);
+      setSelectedFiles([]);
     }
   }, [open]);
 
@@ -223,31 +226,40 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
       if (formData.dueDate && formData.dueDate.trim() !== '') {
         updateData.dueDate = convertToMySQLDateTime(formData.dueDate);
       }
+      // isVisible - include if provided
+      if (formData.isVisible !== undefined) {
+        updateData.isVisible = formData.isVisible;
+      }
 
       console.log('Frontend updateData:', updateData);
-      console.log('Frontend selectedFile:', selectedFile);
-      console.log('Frontend removeAttachment:', removeAttachment);
+      console.log('Frontend selectedFiles:', selectedFiles);
 
-      // Handle file upload/removal
-      await assignmentApi.updateAssignment(
+      // Handle file upload - add new attachments
+      const updatedAssignment = await assignmentApi.updateAssignment(
         clubId, 
         assignment.id, 
         updateData,
-        selectedFile || undefined,
-        removeAttachment
+        selectedFiles.length > 0 ? selectedFiles : undefined
       );
+
+      console.log('Update response assignment:', {
+        id: updatedAssignment.id,
+        attachmentPath: updatedAssignment.attachmentPath,
+        attachmentName: updatedAssignment.attachmentName,
+        attachmentMimeType: updatedAssignment.attachmentMimeType,
+        attachments: updatedAssignment.attachments,
+        attachmentsCount: updatedAssignment.attachments?.length || 0
+      });
 
       toast.success("Assignment updated successfully!");
       setShowDateChangeWarning(false);
       setPendingSubmit(false);
       // Reset form state
-      setSelectedFile(null);
-      setRemoveAttachment(false);
+      setSelectedFiles([]);
       // Close dialog first
       onOpenChange(false);
-      // Call onSuccess immediately to refresh assignment data
-      // The parent component will handle fetching the updated assignment
-      onSuccess();
+      // Pass the updated assignment to onSuccess so parent can use it directly
+      onSuccess(updatedAssignment);
     } catch (error: any) {
       console.error("Error updating assignment:", error);
       toast.error(error.response?.data?.message || "Failed to update assignment");
@@ -296,7 +308,7 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+      <DialogContent className="max-h-[90vh] overflow-y-auto max-w-[calc(100vw-1rem)] sm:max-w-3xl p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Edit Assignment</DialogTitle>
           <DialogDescription>
@@ -313,7 +325,7 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form id="edit-assignment-form" onSubmit={handleSubmit} className="space-y-6">
           {/* Basic Information Card */}
           <Card>
             <CardHeader>
@@ -362,8 +374,54 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
             </CardContent>
           </Card>
 
-          {/* Attachment Card */}
-          {assignment.attachmentPath && assignment.attachmentName && !removeAttachment && (
+          {/* Existing Attachments Card */}
+          {assignment.attachments && assignment.attachments.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Current Attachments
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {assignment.attachments.map((attachment) => (
+                  <div key={attachment.id} className="flex items-center gap-2 p-2 sm:p-3 bg-muted rounded-md">
+                    <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-sm flex-1 truncate min-w-0" title={attachment.fileName}>{truncateFileName(attachment.fileName)}</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        if (!clubId || !assignment.id) return;
+                        try {
+                          setDeletingAttachmentId(attachment.id);
+                          await assignmentApi.deleteAttachment(clubId, assignment.id, attachment.id);
+                          toast.success('Attachment deleted successfully');
+                          // Refresh assignment data
+                          const updated = await assignmentApi.getAssignment(clubId, assignment.id);
+                          onSuccess(updated);
+                        } catch (error: any) {
+                          console.error('Error deleting attachment:', error);
+                          toast.error(error.response?.data?.message || 'Failed to delete attachment');
+                        } finally {
+                          setDeletingAttachmentId(null);
+                        }
+                      }}
+                      disabled={deletingAttachmentId === attachment.id}
+                      className="flex-shrink-0 p-2 sm:px-3 sm:py-2"
+                    >
+                      <X className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">{deletingAttachmentId === attachment.id ? 'Deleting...' : 'Remove'}</span>
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Legacy single attachment support (for backward compatibility) */}
+          {(!assignment.attachments || assignment.attachments.length === 0) && assignment.attachmentPath && assignment.attachmentName && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
@@ -375,19 +433,7 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
                 <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
                   <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   <span className="text-sm flex-1 truncate" title={assignment.attachmentName}>{truncateFileName(assignment.attachmentName)}</span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setRemoveAttachment(true);
-                      setSelectedFile(null);
-                    }}
-                    className="flex-shrink-0"
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Remove
-                  </Button>
+                  <span className="text-xs text-muted-foreground">(Legacy attachment)</span>
                 </div>
               </CardContent>
             </Card>
@@ -398,49 +444,62 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Upload className="h-4 w-4" />
-                {assignment.attachmentPath && !removeAttachment ? 'Replace Attachment' : 'Add Attachment (Optional)'}
+                New Attachment
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <input
                 ref={fileInputRef}
                 type="file"
+                multiple
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    if (file.size > 10 * 1024 * 1024) {
-                      toast.error("File size must be less than 10MB");
-                      return;
+                  const files = Array.from(e.target.files || []);
+                  if (files.length > 0) {
+                    const validFiles: File[] = [];
+                    for (const file of files) {
+                      if (file.size > 10 * 1024 * 1024) {
+                        toast.error(`${file.name} is larger than 10MB`);
+                        continue;
+                      }
+                      validFiles.push(file);
                     }
-                    setSelectedFile(file);
-                    setRemoveAttachment(false);
+                    if (validFiles.length > 0) {
+                      setSelectedFiles([...selectedFiles, ...validFiles]);
+                    }
+                  }
+                  // Reset input to allow selecting the same file again
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
                   }
                 }}
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,image/*"
                 className="hidden"
               />
               
-              {selectedFile ? (
-                <div className="flex items-center gap-2 p-3 bg-muted rounded-md border">
-                  <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <span className="text-sm flex-1 truncate" title={selectedFile.name}>{truncateFileName(selectedFile.name)}</span>
-                  <span className="text-xs text-muted-foreground flex-shrink-0">
-                    ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
-                  </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setSelectedFile(null);
-                      if (fileInputRef.current) {
-                        fileInputRef.current.value = '';
-                      }
-                    }}
-                    className="h-6 w-6 p-0 flex-shrink-0"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+              {selectedFiles.length > 0 ? (
+                <div className="space-y-2">
+                  {selectedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center gap-2 p-3 bg-muted rounded-md border">
+                      <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm flex-1 truncate" title={file.name}>{truncateFileName(file.name)}</span>
+                      <span className="text-xs text-muted-foreground flex-shrink-0">
+                        ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const newFiles = [...selectedFiles];
+                          newFiles.splice(index, 1);
+                          setSelectedFiles(newFiles);
+                        }}
+                        className="h-6 w-6 p-0 flex-shrink-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div
@@ -449,15 +508,15 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
                   style={{ paddingTop: '3rem', paddingBottom: '3rem', paddingLeft: '2rem', paddingRight: '2rem' }}
                 >
                   <Upload className="h-12 w-12 mx-auto mb-2 opacity-50 text-muted-foreground" />
-                  <p className="text-sm font-medium mb-1">Click to select file</p>
-                  <p className="text-xs text-muted-foreground">or drag and drop</p>
+                  <p className="text-sm font-medium mb-1">Click to select files</p>
+                  <p className="text-xs text-muted-foreground">or drag and drop (multiple files supported)</p>
                 </div>
               )}
 
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <Info className="h-3 w-3" />
-                  .pdf, .docx, .xlsx, .pptx, .txt, .jpg, .jpeg, .png, .zip, .rar (Max 10 MB)
+                  .pdf, .docx, .xlsx, .pptx, .txt, .jpg, .jpeg, .png, .zip, .rar (Max 10 MB per file)
                 </p>
               </div>
             </CardContent>
@@ -547,16 +606,41 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
             </CardContent>
           </Card>
 
-          {/* Actions */}
-          <div className="flex gap-2 justify-end pt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Updating..." : "Update Assignment"}
-            </Button>
-          </div>
+          {/* Visibility Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                {formData.isVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                Assignment Visibility
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center">
+                  <Checkbox
+                    id="edit-isVisible"
+                    checked={formData.isVisible}
+                    onCheckedChange={(checked) => setFormData({ ...formData, isVisible: checked === true })}
+                  />
+                </div>
+                <Label htmlFor="edit-isVisible" className="cursor-pointer text-sm font-medium mb-0">
+                  Make this assignment visible to members
+                </Label>
+              </div>
+            </CardContent>
+          </Card>
+
         </form>
+        
+        {/* Actions */}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button type="submit" form="edit-assignment-form" disabled={isLoading}>
+            {isLoading ? "Updating..." : "Update Assignment"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
 
       {/* Date Change Warning Dialog */}
