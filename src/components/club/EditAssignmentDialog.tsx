@@ -213,8 +213,8 @@ export function EditAssignmentDialog({ open, onOpenChange, assignment, onSuccess
         updateData.description = formData.description.trim();
       }
       // MaxScore - include if provided and valid
-      if (formData.maxScore !== undefined && formData.maxScore !== null && formData.maxScore !== '') {
-        const maxScoreNum = Number(formData.maxScore);
+      if (formData.maxScore !== undefined && formData.maxScore !== null && String(formData.maxScore) !== '') {
+        const maxScoreNum = typeof formData.maxScore === 'string' ? Number(formData.maxScore) : formData.maxScore;
         if (!isNaN(maxScoreNum) && maxScoreNum > 0) {
           updateData.maxScore = maxScoreNum;
         }

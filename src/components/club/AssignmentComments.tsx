@@ -159,7 +159,7 @@ export function AssignmentComments({ assignmentId }: AssignmentCommentsProps) {
   };
 
   const renderComment = (comment: AssignmentComment, isReply = false) => {
-    const isOwner = user?.id === comment.userId;
+    const isOwner = user?.id === String(comment.userId);
     const isEditing = editingCommentId === comment.id;
     const isHidden = comment.isHidden === true;
 

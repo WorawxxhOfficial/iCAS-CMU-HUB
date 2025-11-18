@@ -18,7 +18,7 @@ import {
   MessageSquare,
   Lightbulb,
   ThumbsUp,
-  User,
+  User as UserIcon,
   FileText,
   Send,
   Loader2,
@@ -369,8 +369,8 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="text-sm truncate max-w-[150px]">{report.sender.name}</p>
-                          {report.sender.club && (
+                          <p className="text-sm truncate max-w-[150px]">{report.sender?.name || 'Unknown'}</p>
+                          {report.sender?.club && (
                             <p className="text-xs text-muted-foreground truncate max-w-[150px]">{report.sender.club}</p>
                           )}
                         </div>
@@ -568,7 +568,7 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
             <DialogHeader>
               <DialogTitle>ส่งคำตอบติดตาม</DialogTitle>
               <DialogDescription>
-                ตอบกลับ {selectedReport.sender.name}
+                ตอบกลับ {selectedReport.sender?.name || 'Unknown'}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">

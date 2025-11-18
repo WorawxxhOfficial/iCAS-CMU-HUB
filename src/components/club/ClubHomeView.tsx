@@ -26,7 +26,7 @@ export function ClubHomeView() {
     if (!user || !clubId) return false;
     if (user.role === 'admin') return true;
     const membership = user.memberships?.find(m => 
-      String(m.clubId) === String(clubId) && m.status === 'approved'
+      m.clubId === clubId && m.status === 'approved'
     );
     return membership?.role === 'leader' || club?.presidentId === user.id;
   }, [user, clubId, club?.presidentId]);

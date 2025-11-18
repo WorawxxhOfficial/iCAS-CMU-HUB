@@ -313,7 +313,6 @@ export function SubmitAssignmentDialog({
                           <RichTextEditor
                             content={textContent}
                             onChange={setTextContent}
-                            placeholder="Write your submission here..."
                           />
                         </TabsContent>
 
