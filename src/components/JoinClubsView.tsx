@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Users, Calendar, MapPin, UserPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "../App";
@@ -25,6 +26,7 @@ interface JoinClubsViewProps {
 
 export function JoinClubsView({ user }: JoinClubsViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
   const [allClubs, setAllClubs] = useState<Club[]>([]);
   const [memberships, setMemberships] = useState<ClubMembership[]>([]);
@@ -78,18 +80,32 @@ export function JoinClubsView({ user }: JoinClubsViewProps) {
   });
 
   // Get available clubs (hide if approved or pending, show if rejected or left)
-  const availableClubs = allClubs.filter(club => {
+  const availableClubs = useMemo(() => allClubs.filter(club => {
     const membership = memberships.find(m => m.clubId === club.id);
     // Show club if: no membership, or status is rejected/left
     // Hide club if: status is approved or pending
     return !membership || (membership.status !== 'approved' && membership.status !== 'pending');
-  });
+  }), [allClubs, memberships]);
 
-  const filteredAvailableClubs = availableClubs.filter((club) =>
-    club.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (club.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (club.category || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Get unique categories from available clubs
+  const categories = useMemo(() => {
+    const uniqueCategories = new Set<string>();
+    availableClubs.forEach(club => {
+      if (club.category) {
+        uniqueCategories.add(club.category);
+      }
+    });
+    return Array.from(uniqueCategories).sort();
+  }, [availableClubs]);
+
+  const filteredAvailableClubs = useMemo(() => availableClubs.filter((club) => {
+    const matchesSearch =
+      club.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (club.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (club.category || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === "all" || club.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  }), [availableClubs, searchQuery, selectedCategory]);
 
   const handleJoinClub = async (clubId: number) => {
     try {
@@ -148,14 +164,33 @@ export function JoinClubsView({ user }: JoinClubsViewProps) {
         />
       </div>
 
-      {/* Search */}
+      {/* Search and Filter */}
       <Card>
         <CardContent className="pt-6">
-          <SearchInput
-              placeholder="ค้นหาชมรมตามชื่อ หมวดหมู่ หรือคำอธิบาย..."
-              value={searchQuery}
-            onChange={setSearchQuery}
-            />
+          <div className="flex flex-col gap-4 md:flex-row">
+            <div className="flex-1">
+              <SearchInput
+                placeholder="ค้นหาชมรมตามชื่อ หมวดหมู่ หรือคำอธิบาย..."
+                value={searchQuery}
+                onChange={setSearchQuery}
+              />
+            </div>
+            <div className="w-full md:w-[200px]">
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="เลือกประเภทชมรม" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">ทุกประเภท</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

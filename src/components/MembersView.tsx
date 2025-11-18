@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -7,8 +7,11 @@ import { Avatar, AvatarFallback, AvatarImage, getDiceBearAvatar } from "./ui/ava
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Progress } from "./ui/progress";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
-import { Search, TrendingUp, TrendingDown, Minus, Eye, CheckCircle, XCircle } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Minus, Eye, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import type { User } from "../App";
+import { useClub } from "../contexts/ClubContext";
+import { clubApi } from "../features/club/api/clubApi";
 
 interface MembersViewProps {
   user: User;
@@ -28,109 +31,61 @@ interface Member {
 }
 
 export function MembersView({ user }: MembersViewProps) {
+  const { clubId } = useClub();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [members] = useState<Member[]>([
-    {
-      id: "1",
-      name: "สมชาย ใจดี",
-      role: "President",
-      email: "somchai@cmu.ac.th",
-      activeRate: 95,
-      eventsAttended: 19,
-      totalEvents: 20,
-      lastActive: "2025-11-07",
-      trend: "stable",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Somchai",
-    },
-    {
-      id: "2",
-      name: "สมหญิง รักดี",
-      role: "Vice President",
-      email: "somying@cmu.ac.th",
-      activeRate: 90,
-      eventsAttended: 18,
-      totalEvents: 20,
-      lastActive: "2025-11-06",
-      trend: "up",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Somying",
-    },
-    {
-      id: "3",
-      name: "ประภาส มั่นคง",
-      role: "Treasurer",
-      email: "prapas@cmu.ac.th",
-      activeRate: 88,
-      eventsAttended: 17,
-      totalEvents: 20,
-      lastActive: "2025-11-07",
-      trend: "up",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Prapas",
-    },
-    {
-      id: "4",
-      name: "วิชัย สุขใจ",
-      role: "Secretary",
-      email: "wichai@cmu.ac.th",
-      activeRate: 85,
-      eventsAttended: 17,
-      totalEvents: 20,
-      lastActive: "2025-11-05",
-      trend: "stable",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Wichai",
-    },
-    {
-      id: "5",
-      name: "นภา สว่างใจ",
-      role: "Member",
-      email: "napa@cmu.ac.th",
-      activeRate: 82,
-      eventsAttended: 16,
-      totalEvents: 20,
-      lastActive: "2025-11-06",
-      trend: "down",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Napa",
-    },
-    {
-      id: "6",
-      name: "ธนพล แข็งแรง",
-      role: "Member",
-      email: "tanpon@cmu.ac.th",
-      activeRate: 75,
-      eventsAttended: 15,
-      totalEvents: 20,
-      lastActive: "2025-11-04",
-      trend: "down",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Tanpon",
-    },
-    {
-      id: "7",
-      name: "พิมพ์ใจ ดีงาม",
-      role: "Member",
-      email: "pimjai@cmu.ac.th",
-      activeRate: 70,
-      eventsAttended: 14,
-      totalEvents: 20,
-      lastActive: "2025-11-03",
-      trend: "stable",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Pimjai",
-    },
-    {
-      id: "8",
-      name: "ศิริพร รุ่งเรือง",
-      role: "Member",
-      email: "siriporn@cmu.ac.th",
-      activeRate: 65,
-      eventsAttended: 13,
-      totalEvents: 20,
-      lastActive: "2025-11-01",
-      trend: "down",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Siriporn",
-    },
-  ]);
+  // Fetch members from API
+  useEffect(() => {
+    const fetchMembers = async () => {
+      if (!clubId) {
+        setIsLoading(false);
+        return;
+      }
 
-  const filteredMembers = members.filter((member) =>
+      try {
+        setIsLoading(true);
+        const data = await clubApi.getClubMembers(clubId);
+        
+        // Check if data is valid array
+        if (!Array.isArray(data)) {
+          console.warn('getClubMembers returned non-array data:', data);
+          setMembers([]);
+          return;
+        }
+        
+        // Transform API data to Member format
+        // Note: API doesn't provide activeRate, eventsAttended, etc. - we'll use defaults for now
+        const transformedMembers: Member[] = data
+          .filter((member: any) => member && member.user) // Filter out invalid members
+          .map((member: any) => ({
+            id: String(member.userId),
+            name: `${member.user?.firstName || ''} ${member.user?.lastName || ''}`.trim() || 'Unknown',
+            role: member.role === 'leader' ? 'Leader' : member.role === 'staff' ? 'Staff' : 'Member',
+            email: member.user?.email || '',
+            activeRate: 75, // Default - can be calculated from check-ins later
+            eventsAttended: 0, // Default - can be calculated from events later
+            totalEvents: 0, // Default
+            lastActive: member.approvedDate || member.createdAt,
+            trend: "stable" as const,
+            avatar: member.user?.avatar,
+          }));
+        
+        setMembers(transformedMembers);
+      } catch (error: any) {
+        console.error('Error fetching members:', error);
+        toast.error('ไม่สามารถโหลดข้อมูลสมาชิกได้ กรุณาลองอีกครั้ง');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMembers();
+  }, [clubId]);
+
+  const filteredMembers = isLoading ? [] : members.filter((member) =>
     member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     member.role.toLowerCase().includes(searchQuery.toLowerCase())
@@ -161,9 +116,9 @@ export function MembersView({ user }: MembersViewProps) {
     }
   };
 
-  const averageActiveRate = Math.round(
-    members.reduce((sum, m) => sum + m.activeRate, 0) / members.length
-  );
+  const averageActiveRate = members.length > 0 
+    ? Math.round(members.reduce((sum, m) => sum + m.activeRate, 0) / members.length)
+    : 0;
 
   const highlyActiveCount = members.filter(m => m.activeRate >= 80).length;
   const activeCount = members.filter(m => m.activeRate >= 60 && m.activeRate < 80).length;
@@ -313,7 +268,20 @@ export function MembersView({ user }: MembersViewProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredMembers.map((member) => (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              ) : filteredMembers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    ไม่พบสมาชิก
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredMembers.map((member) => (
                 <TableRow key={member.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -351,7 +319,8 @@ export function MembersView({ user }: MembersViewProps) {
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))}
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

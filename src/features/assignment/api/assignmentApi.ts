@@ -271,9 +271,47 @@ export const assignmentApi = {
 
   // Get file URL for download
   getFileUrl: (filePath: string): string => {
-    // Assuming backend serves uploads at /uploads route
-    const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5002/api').replace('/api', '');
-    return `${baseUrl}/${filePath}`;
+    // Backend serves uploads at /uploads route
+    // Get base URL - use same logic as api.ts
+    let baseUrl: string;
+    
+    if (typeof window !== 'undefined') {
+      const apiUrl = import.meta.env.VITE_API_URL;
+      if (apiUrl) {
+        // If VITE_API_URL is set (e.g., "http://localhost:5000/api"), remove "/api"
+        baseUrl = apiUrl.replace('/api', '').replace(/\/$/, '');
+      } else {
+        // Infer from window location (same as api.ts)
+        const origin = window.location.origin;
+        if (origin.includes('localhost:3000') || origin.includes('127.0.0.1:3000')) {
+          baseUrl = 'http://localhost:5000';
+        } else {
+          baseUrl = origin;
+        }
+      }
+    } else {
+      baseUrl = 'http://localhost:5000';
+    }
+    
+    // Normalize filePath - remove leading slashes
+    let normalizedPath = filePath.replace(/^\/+/, '');
+    
+    // filePath from database is already "uploads/assignments/..."
+    // So we can use it directly
+    const fullUrl = `${baseUrl}/${normalizedPath}`;
+    
+    // Debug logging (can be removed in production)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('getFileUrl:', { 
+        filePath, 
+        normalizedPath, 
+        fullUrl, 
+        baseUrl,
+        windowOrigin: typeof window !== 'undefined' ? window.location.origin : 'N/A'
+      });
+    }
+    
+    return fullUrl;
   },
 
   // Comment methods

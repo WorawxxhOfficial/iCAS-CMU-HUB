@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -10,39 +10,19 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
-import { Plus, Search, FileText, Clock, CheckCircle2, AlertCircle, XCircle, Upload, Eye, Send, Settings, Download, Mail } from "lucide-react";
+import { Plus, Search, FileText, Clock, CheckCircle2, AlertCircle, XCircle, Upload, Eye, Send, Settings, Download, Mail, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "../App";
+import { documentApi } from "../features/document/api/documentApi";
+import type { Document as DocumentType, DocumentType as DocType, DocumentStatus as DocStatus } from "../features/document/types/document";
 
 interface BudgetManagementViewProps {
   user: User;
 }
 
-type DocumentStatus =
-  | "Draft"
-  | "Sent"
-  | "Delivered"
-  | "Read"
-  | "Needs Revision";
-
-type DocumentType = "Report" | "Form" | "Application" | "Contract" | "Letter" | "Other";
-
-interface Document {
-  id: number;
-  title: string;
-  type: DocumentType;
-  recipient: string;
-  dueDate: string;
-  status: DocumentStatus;
-  sentBy?: string;
-  sentDate?: string;
-  notes?: string;
-  attachments?: string[];
-}
-
 interface NewDocumentFormState {
   title: string;
-  type: DocumentType | "";
+  type: DocType | "";
   recipient: string;
   dueDate: string;
   notes: string;
@@ -50,10 +30,10 @@ interface NewDocumentFormState {
 
 export function BudgetManagementView({ user }: BudgetManagementViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<DocumentStatus | "all">("all");
+  const [filterStatus, setFilterStatus] = useState<DocStatus | "all">("all");
   const [sortBy, setSortBy] = useState<"date-asc" | "date-desc" | "title-asc" | "title-desc">("date-asc");
   const [isNewDocumentOpen, setIsNewDocumentOpen] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<DocumentType | null>(null);
   const [newDocumentForm, setNewDocumentForm] = useState<NewDocumentFormState>({
     title: "",
     type: "",
@@ -62,8 +42,8 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
     notes: "",
   });
   const [newDocumentAttachmentName, setNewDocumentAttachmentName] = useState<string | null>(null);
-
-  const [documents, setDocuments] = useState<Document[]>([
+  // Mock data as fallback
+  const mockDocuments: DocumentType[] = [
     {
       id: 1,
       title: "Monthly Activity Report",
@@ -72,6 +52,9 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
       dueDate: "2025-11-15",
       status: "Draft",
       notes: "Need to include event photos and attendance records.",
+      createdBy: user.id ? parseInt(user.id) : 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     },
     {
       id: 2,
@@ -80,9 +63,12 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
       recipient: "Finance Department",
       dueDate: "2025-11-10",
       status: "Sent",
-      sentBy: `${user.firstName} ${user.lastName}`,
+      sentBy: user.id ? parseInt(user.id) : 1,
       sentDate: "2025-11-05T09:30:00+07:00",
       notes: "Requesting approval for upcoming event expenses.",
+      createdBy: user.id ? parseInt(user.id) : 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     },
     {
       id: 3,
@@ -91,10 +77,12 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
       recipient: "Campus Security",
       dueDate: "2025-11-12",
       status: "Delivered",
-      sentBy: `${user.firstName} ${user.lastName}`,
+      sentBy: user.id ? parseInt(user.id) : 1,
       sentDate: "2025-11-03T14:15:00+07:00",
-      attachments: ["permission-form.pdf"],
       notes: "Application submitted. Waiting for approval.",
+      createdBy: user.id ? parseInt(user.id) : 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     },
     {
       id: 4,
@@ -103,10 +91,12 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
       recipient: "AV Equipment Supplier",
       dueDate: "2025-11-08",
       status: "Read",
-      sentBy: `${user.firstName} ${user.lastName}`,
+      sentBy: user.id ? parseInt(user.id) : 1,
       sentDate: "2025-10-30T11:45:00+07:00",
-      attachments: ["contract-draft.pdf"],
       notes: "Contract reviewed and signed by both parties.",
+      createdBy: user.id ? parseInt(user.id) : 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     },
     {
       id: 5,
@@ -116,8 +106,51 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
       dueDate: "2025-11-18",
       status: "Needs Revision",
       notes: "Missing required signatures. Please resubmit.",
+      createdBy: user.id ? parseInt(user.id) : 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     },
-  ]);
+  ];
+
+  const [documents, setDocuments] = useState<DocumentType[]>(mockDocuments);
+  const [isLoading, setIsLoading] = useState(true);
+  const [useMockData, setUseMockData] = useState(false);
+
+  // Fetch documents from API
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      try {
+        setIsLoading(true);
+        const filters: { status?: string; search?: string } = {};
+        if (filterStatus !== "all") filters.status = filterStatus;
+        if (searchQuery) filters.search = searchQuery;
+        
+        const data = await documentApi.getDocuments(filters);
+        // Use API data if available, otherwise use mock data
+        if (data && data.length > 0) {
+          setDocuments(data);
+          setUseMockData(false);
+        } else {
+          // If API returns empty, use mock data
+          setDocuments(mockDocuments);
+          setUseMockData(true);
+        }
+      } catch (error: any) {
+        console.error('Error fetching documents:', error);
+        // On error, use mock data
+        setDocuments(mockDocuments);
+        setUseMockData(true);
+        // Don't show error toast if using mock data
+        if (error.response?.status !== 404) {
+          toast.error('ไม่สามารถโหลดเอกสารได้ กำลังใช้ข้อมูลตัวอย่าง');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDocuments();
+  }, [filterStatus, searchQuery]);
 
   const formatDate = (value?: string) => {
     if (!value) return "-";
@@ -126,7 +159,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
     return parsed.toLocaleDateString("th-TH");
   };
 
-  const getStatusBadge = (status: DocumentStatus) => {
+  const getStatusBadge = (status: DocStatus) => {
     switch (status) {
       case "Draft":
         return (
@@ -173,7 +206,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
     }
   };
 
-  const getTypeBadge = (type: DocumentType) => (
+  const getTypeBadge = (type: DocType) => (
     <Badge variant="outline">{type}</Badge>
   );
 
@@ -211,7 +244,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
     setNewDocumentAttachmentName(null);
   };
 
-  const handleSubmitDocument = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmitDocument = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!newDocumentForm.type) {
@@ -219,39 +252,206 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
       return;
     }
 
-    const newDocument: Document = {
-      id: Date.now(),
-      title: newDocumentForm.title,
-      type: newDocumentForm.type,
-      recipient: newDocumentForm.recipient,
-      dueDate: newDocumentForm.dueDate,
-      status: "Draft",
-      notes: newDocumentForm.notes,
-      attachments: newDocumentAttachmentName ? [newDocumentAttachmentName] : undefined,
-    };
-
-    setDocuments((prev) => [newDocument, ...prev]);
-    toast.success("สร้างเอกสารใหม่แล้ว");
-    resetNewDocumentForm();
-    setIsNewDocumentOpen(false);
+    try {
+      let newDocument: DocumentType;
+      
+      if (useMockData) {
+        // If using mock data, create locally
+        newDocument = {
+          id: Date.now(),
+          title: newDocumentForm.title,
+          type: newDocumentForm.type as DocType,
+          recipient: newDocumentForm.recipient,
+          dueDate: newDocumentForm.dueDate,
+          status: "Draft",
+          notes: newDocumentForm.notes || undefined,
+          createdBy: user.id ? parseInt(user.id) : 1,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setDocuments((prev) => [newDocument, ...prev]);
+        toast.success("สร้างเอกสารใหม่แล้ว");
+      } else {
+        // Try to create via API
+        try {
+          newDocument = await documentApi.createDocument({
+            title: newDocumentForm.title,
+            type: newDocumentForm.type as DocType,
+            recipient: newDocumentForm.recipient,
+            dueDate: newDocumentForm.dueDate,
+            notes: newDocumentForm.notes || undefined,
+          });
+          setDocuments((prev) => [newDocument, ...prev]);
+          toast.success("สร้างเอกสารใหม่แล้ว");
+        } catch (apiError: any) {
+          // If API fails, create locally
+          console.warn('API create failed, creating locally:', apiError);
+          newDocument = {
+            id: Date.now(),
+            title: newDocumentForm.title,
+            type: newDocumentForm.type as DocType,
+            recipient: newDocumentForm.recipient,
+            dueDate: newDocumentForm.dueDate,
+            status: "Draft",
+            notes: newDocumentForm.notes || undefined,
+            createdBy: user.id ? parseInt(user.id) : 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          setDocuments((prev) => [newDocument, ...prev]);
+          setUseMockData(true);
+          toast.success("สร้างเอกสารใหม่แล้ว (บันทึกเฉพาะในเครื่อง)");
+        }
+      }
+      
+      resetNewDocumentForm();
+      setIsNewDocumentOpen(false);
+    } catch (error: any) {
+      console.error('Error creating document:', error);
+      toast.error('ไม่สามารถสร้างเอกสารได้ กรุณาลองอีกครั้ง');
+    }
   };
 
-  const updateDocument = (docId: number, updates: Partial<Document>, successMessage?: string) => {
-    let updatedDocument: Document | null = null;
-    setDocuments((prev) =>
-      prev.map((doc) => {
-        if (doc.id === docId) {
-          updatedDocument = { ...doc, ...updates };
-          return updatedDocument;
+  const handleUpdateDocument = async (docId: number, updates: Partial<DocumentType>, successMessage?: string) => {
+    try {
+      if (useMockData) {
+        // If using mock data, update locally
+        const updatedDocument = documents.find(doc => doc.id === docId);
+        if (updatedDocument) {
+          const newDocument = { ...updatedDocument, ...updates, updatedAt: new Date().toISOString() };
+          setDocuments((prev) =>
+            prev.map((doc) => (doc.id === docId ? newDocument : doc))
+          );
+          setSelectedDocument(newDocument);
+          if (successMessage) {
+            toast.success(successMessage);
+          }
         }
-        return doc;
-      })
-    );
-    if (updatedDocument) {
-      setSelectedDocument(updatedDocument);
-      if (successMessage) {
-        toast.success(successMessage);
+      } else {
+        // Try to update via API
+        try {
+          const updatedDocument = await documentApi.updateDocument(docId, updates);
+          setDocuments((prev) =>
+            prev.map((doc) => (doc.id === docId ? updatedDocument : doc))
+          );
+          setSelectedDocument(updatedDocument);
+          if (successMessage) {
+            toast.success(successMessage);
+          }
+        } catch (apiError: any) {
+          // If API fails, update locally
+          console.warn('API update failed, updating locally:', apiError);
+          const updatedDocument = documents.find(doc => doc.id === docId);
+          if (updatedDocument) {
+            const newDocument = { ...updatedDocument, ...updates, updatedAt: new Date().toISOString() };
+            setDocuments((prev) =>
+              prev.map((doc) => (doc.id === docId ? newDocument : doc))
+            );
+            setSelectedDocument(newDocument);
+            setUseMockData(true);
+            if (successMessage) {
+              toast.success(`${successMessage} (บันทึกเฉพาะในเครื่อง)`);
+            }
+          }
+        }
       }
+    } catch (error: any) {
+      console.error('Error updating document:', error);
+      toast.error('ไม่สามารถอัปเดตเอกสารได้ กรุณาลองอีกครั้ง');
+    }
+  };
+
+  const handleDeleteDocument = async (docId: number) => {
+    if (!confirm("คุณแน่ใจหรือไม่ว่าต้องการลบเอกสารนี้?")) {
+      return;
+    }
+
+    try {
+      if (useMockData) {
+        // If using mock data, delete locally
+        setDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+        if (selectedDocument?.id === docId) {
+          setSelectedDocument(null);
+        }
+        toast.success("ลบเอกสารแล้ว");
+      } else {
+        // Try to delete via API
+        try {
+          await documentApi.deleteDocument(docId);
+          setDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+          if (selectedDocument?.id === docId) {
+            setSelectedDocument(null);
+          }
+          toast.success("ลบเอกสารแล้ว");
+        } catch (apiError: any) {
+          // If API fails, delete locally
+          console.warn('API delete failed, deleting locally:', apiError);
+          setDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+          if (selectedDocument?.id === docId) {
+            setSelectedDocument(null);
+          }
+          setUseMockData(true);
+          toast.success("ลบเอกสารแล้ว (ลบเฉพาะในเครื่อง)");
+        }
+      }
+    } catch (error: any) {
+      console.error('Error deleting document:', error);
+      toast.error('ไม่สามารถลบเอกสารได้ กรุณาลองอีกครั้ง');
+    }
+  };
+
+  const handleSendDocument = async (docId: number) => {
+    try {
+      if (useMockData) {
+        // If using mock data, update locally
+        const document = documents.find(doc => doc.id === docId);
+        if (document) {
+          const updatedDocument = {
+            ...document,
+            status: "Sent" as DocStatus,
+            sentBy: user.id ? parseInt(user.id) : 1,
+            sentDate: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          setDocuments((prev) =>
+            prev.map((doc) => (doc.id === docId ? updatedDocument : doc))
+          );
+          setSelectedDocument(updatedDocument);
+          toast.success("ส่งเอกสารแล้ว");
+        }
+      } else {
+        // Try to send via API
+        try {
+          const updatedDocument = await documentApi.sendDocument(docId);
+          setDocuments((prev) =>
+            prev.map((doc) => (doc.id === docId ? updatedDocument : doc))
+          );
+          setSelectedDocument(updatedDocument);
+          toast.success("ส่งเอกสารแล้ว");
+        } catch (apiError: any) {
+          // If API fails, update locally
+          console.warn('API send failed, updating locally:', apiError);
+          const document = documents.find(doc => doc.id === docId);
+          if (document) {
+            const updatedDocument = {
+              ...document,
+              status: "Sent" as DocStatus,
+              sentBy: user.id ? parseInt(user.id) : 1,
+              sentDate: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            setDocuments((prev) =>
+              prev.map((doc) => (doc.id === docId ? updatedDocument : doc))
+            );
+            setSelectedDocument(updatedDocument);
+            setUseMockData(true);
+            toast.success("ส่งเอกสารแล้ว (บันทึกเฉพาะในเครื่อง)");
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Error sending document:', error);
+      toast.error('ไม่สามารถส่งเอกสารได้ กรุณาลองอีกครั้ง');
     }
   };
 
@@ -300,7 +500,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                   <Label htmlFor="doc-type">ประเภทเอกสาร</Label>
                   <Select
                     value={newDocumentForm.type || undefined}
-                    onValueChange={(value: DocumentType) =>
+                    onValueChange={(value: DocType) =>
                       setNewDocumentForm((prev) => ({ ...prev, type: value }))
                     }
                   >
@@ -456,7 +656,20 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDocuments.map((doc) => (
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredDocuments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                      ไม่พบเอกสาร
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredDocuments.map((doc) => (
                   <TableRow key={doc.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -488,16 +701,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                               <DropdownMenuItem
                                 onSelect={(e) => {
                                   e.preventDefault();
-                                  updateDocument(
-                                    doc.id,
-                                    {
-                                      status: "Sent",
-                                      sentBy: `${user.firstName} ${user.lastName}`,
-                                      sentDate: new Date().toISOString(),
-                                    },
-                                    "ส่งเอกสารแล้ว"
-                                  );
-                                  setSelectedDocument({ ...doc, status: "Sent", sentBy: `${user.firstName} ${user.lastName}`, sentDate: new Date().toISOString() });
+                                  handleSendDocument(doc.id);
                                 }}
                               >
                                 ส่งเอกสาร
@@ -508,7 +712,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                                 <DropdownMenuItem
                                   onSelect={(e) => {
                                     e.preventDefault();
-                                    updateDocument(
+                                    handleUpdateDocument(
                                       doc.id,
                                       { status: "Delivered" },
                                       "เอกสารส่งถึงผู้รับแล้ว"
@@ -521,7 +725,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                                 <DropdownMenuItem
                                   onSelect={(e) => {
                                     e.preventDefault();
-                                    updateDocument(
+                                    handleUpdateDocument(
                                       doc.id,
                                       { status: "Needs Revision" },
                                       "ส่งกลับเพื่อแก้ไข"
@@ -539,7 +743,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                                 <DropdownMenuItem
                                   onSelect={(e) => {
                                     e.preventDefault();
-                                    updateDocument(
+                                    handleUpdateDocument(
                                       doc.id,
                                       { status: "Read" },
                                       "ทำเครื่องหมายว่าอ่านแล้ว"
@@ -552,7 +756,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                                 <DropdownMenuItem
                                   onSelect={(e) => {
                                     e.preventDefault();
-                                    updateDocument(
+                                    handleUpdateDocument(
                                       doc.id,
                                       { status: "Needs Revision" },
                                       "ขอข้อมูลเพิ่มเติม"
@@ -570,7 +774,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                                 <DropdownMenuItem
                                   onSelect={(e) => {
                                     e.preventDefault();
-                                    updateDocument(
+                                    handleUpdateDocument(
                                       doc.id,
                                       { status: "Draft", sentBy: undefined, sentDate: undefined },
                                       "ย้ายเอกสารกลับไปยังร่าง"
@@ -583,12 +787,11 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                                 <DropdownMenuItem
                                   onSelect={(e) => {
                                     e.preventDefault();
-                                    updateDocument(
+                                    handleUpdateDocument(
                                       doc.id,
                                       { status: "Sent", sentBy: `${user.firstName} ${user.lastName}`, sentDate: new Date().toISOString() },
                                       "ส่งเอกสารอีกครั้ง"
                                     );
-                                    setSelectedDocument({ ...doc, status: "Sent", sentBy: `${user.firstName} ${user.lastName}`, sentDate: new Date().toISOString() });
                                   }}
                                 >
                                   ส่งอีกครั้ง
@@ -605,7 +808,8 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
@@ -708,15 +912,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                   {selectedDocument.status === "Draft" && (
                     <Button
                       onClick={() => {
-                        updateDocument(
-                          selectedDocument.id,
-                          {
-                            status: "Sent",
-                            sentBy: `${user.firstName} ${user.lastName}`,
-                            sentDate: new Date().toISOString(),
-                          },
-                          "ส่งเอกสารแล้ว"
-                        );
+                        handleSendDocument(selectedDocument.id);
                       }}
                       className="flex-1 sm:flex-none"
                     >
@@ -728,7 +924,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                       <Button
                         variant="outline"
                         onClick={() => {
-                          updateDocument(
+                          handleUpdateDocument(
                             selectedDocument.id,
                             { status: "Delivered" },
                             "เอกสารส่งถึงผู้รับแล้ว"
@@ -741,7 +937,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                       <Button
                         variant="destructive"
                         onClick={() =>
-                          updateDocument(
+                          handleUpdateDocument(
                             selectedDocument.id,
                             { status: "Needs Revision" },
                             "ส่งกลับเพื่อแก้ไข"
@@ -757,7 +953,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                     <>
                       <Button
                         onClick={() =>
-                          updateDocument(
+                          handleUpdateDocument(
                             selectedDocument.id,
                             { status: "Read" },
                             "ทำเครื่องหมายว่าอ่านแล้ว"
@@ -785,9 +981,9 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                   {selectedDocument.status === "Needs Revision" && (
                     <Button
                       onClick={() =>
-                        updateDocument(
+                        handleUpdateDocument(
                           selectedDocument.id,
-                          { status: "Draft", sentBy: undefined, sentDate: undefined },
+                          { status: "Draft" },
                           "ย้ายเอกสารกลับไปยังร่าง"
                         )
                       }

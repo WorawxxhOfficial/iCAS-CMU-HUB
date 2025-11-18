@@ -220,13 +220,50 @@ export const createEvent = async (
     }
 
     const userId = req.user.userId;
-    const { title, type, date, time, location, description, reminderEnabled } = req.body as CreateEventRequest;
+    const { title, type, date, time, location, description, reminderEnabled, clubId } = req.body as CreateEventRequest;
 
     // Validation
     if (!title || !type || !date || !time || !location) {
       const error: ApiError = new Error('Missing required fields: title, type, date, time, location');
       error.statusCode = 400;
       return next(error);
+    }
+
+    // Determine club_id: use provided clubId or get user's primary club
+    let eventClubId = clubId;
+    if (!eventClubId) {
+      // Get user's primary club (leader role or first approved membership)
+      const [membershipRows] = await pool.execute<RowDataPacket[]>(
+        `SELECT club_id, role 
+         FROM club_memberships 
+         WHERE user_id = ? AND status = 'approved'
+         ORDER BY CASE WHEN role = 'leader' THEN 1 ELSE 2 END
+         LIMIT 1`,
+        [userId]
+      );
+
+      if (membershipRows.length === 0) {
+        const error: ApiError = new Error('You must be a member of a club to create events');
+        error.statusCode = 400;
+        return next(error);
+      }
+
+      eventClubId = membershipRows[0].club_id;
+    }
+
+    // Verify user is a member of the specified club
+    if (eventClubId) {
+      const [membershipCheck] = await pool.execute<RowDataPacket[]>(
+        `SELECT id FROM club_memberships 
+         WHERE user_id = ? AND club_id = ? AND status = 'approved'`,
+        [userId, eventClubId]
+      );
+
+      if (membershipCheck.length === 0) {
+        const error: ApiError = new Error('You must be a member of the specified club to create events');
+        error.statusCode = 403;
+        return next(error);
+      }
     }
 
     // Validate event type
@@ -256,9 +293,10 @@ export const createEvent = async (
     // Insert event
     const [result] = await pool.execute<ResultSetHeader>(
       `INSERT INTO events 
-       (title, type, date, time, location, description, attendees, reminder_enabled, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+       (club_id, title, type, date, time, location, description, attendees, reminder_enabled, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       [
+        eventClubId,
         title,
         type,
         eventDate.toISOString().split('T')[0],

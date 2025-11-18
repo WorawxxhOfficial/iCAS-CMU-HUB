@@ -200,11 +200,21 @@ export function AssignmentDetailView() {
       setIsLoadingMembers(true);
       // Fetch all members
       const membersData = await clubApi.getClubMembers(parseInt(clubId));
+      // Check if data is valid array
+      if (!Array.isArray(membersData)) {
+        console.warn('getClubMembers returned non-array data:', membersData);
+        setMembers([]);
+        return;
+      }
       // Filter out leaders
-      const nonLeaderMembers = membersData.filter((m: ClubMember) => m.role !== 'leader');
+      const nonLeaderMembers = membersData.filter((m: ClubMember) => m && m.role !== 'leader');
       
       // Fetch all submissions
       const submissions = await assignmentApi.getAssignmentSubmissions(parseInt(clubId), parseInt(assignmentId));
+      // Check if submissions is valid array
+      if (!Array.isArray(submissions)) {
+        console.warn('getAssignmentSubmissions returned non-array data:', submissions);
+      }
       
       // Parse due date for late submission check
       let dueDate: Date;
@@ -222,19 +232,23 @@ export function AssignmentDetailView() {
       }
       
       // Combine members with their submissions
-      const membersWithSubmissions: MemberWithSubmission[] = nonLeaderMembers.map((member: ClubMember) => {
-        const submission = submissions.find((s: AssignmentSubmission) => s.userId === member.userId);
-        let isLate = false;
-        if (submission) {
-          const submittedDate = new Date(submission.submittedAt);
-          isLate = submittedDate > dueDate;
-        }
-        return {
-          ...member,
-          submission,
-          isLate
-        };
-      });
+      const membersWithSubmissions: MemberWithSubmission[] = nonLeaderMembers
+        .filter((member: ClubMember) => member && member.userId) // Filter out invalid members
+        .map((member: ClubMember) => {
+          const submission = Array.isArray(submissions) 
+            ? submissions.find((s: AssignmentSubmission) => s && s.userId === member.userId)
+            : undefined;
+          let isLate = false;
+          if (submission && submission.submittedAt) {
+            const submittedDate = new Date(submission.submittedAt);
+            isLate = submittedDate > dueDate;
+          }
+          return {
+            ...member,
+            submission,
+            isLate
+          };
+        });
       
       setMembers(membersWithSubmissions);
     } catch (error: any) {

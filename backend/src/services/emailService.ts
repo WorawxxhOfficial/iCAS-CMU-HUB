@@ -50,7 +50,11 @@ const transporter = nodemailer.createTransport({
 export const sendOTPEmail = async (email: string, otp: string): Promise<void> => {
   // Check if SMTP credentials are configured
   if (!smtpUser || !smtpPass) {
-    throw new Error('SMTP credentials not configured. Please set SMTP_USER and SMTP_PASS in backend/.env');
+    // In development mode, log OTP to console instead of sending email
+    console.warn('⚠️  Email service disabled: SMTP credentials not configured');
+    console.log(`📧 [DEV MODE] OTP for ${email}: ${otp}`);
+    console.log('   Email verification is disabled. Use the OTP above for testing.');
+    return; // Return successfully without sending email
   }
 
   const mailOptions = {

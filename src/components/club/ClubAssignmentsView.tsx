@@ -205,10 +205,10 @@ export function ClubAssignmentsView() {
     if (!assignments) return;
 
     let filtered: CategorizedAssignments = {
-      current: [...assignments.current],
-      upcoming: [...assignments.upcoming],
-      overdue: [...assignments.overdue],
-      past: [...assignments.past],
+      current: Array.isArray(assignments.current) ? [...assignments.current] : [],
+      upcoming: Array.isArray(assignments.upcoming) ? [...assignments.upcoming] : [],
+      overdue: Array.isArray(assignments.overdue) ? [...assignments.overdue] : [],
+      past: Array.isArray(assignments.past) ? [...assignments.past] : [],
     };
 
     // Apply status filters

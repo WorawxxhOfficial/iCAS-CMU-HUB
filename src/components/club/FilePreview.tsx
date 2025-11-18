@@ -190,7 +190,7 @@ export function FilePreview({ open, onOpenChange, source }: FilePreviewProps) {
       onOpenChange={handleOpenChange}
     >
       <DialogContent 
-        className="max-w-[95vw] sm:max-w-7xl max-h-[95vh] overflow-hidden flex flex-col w-[95vw] sm:w-full"
+        className="max-w-[95vw] sm:max-w-7xl max-h-[95vh] overflow-hidden flex flex-col w-[95vw] sm:w-full p-0"
         onInteractOutside={handleInteractOutside}
         onPointerDownOutside={handlePointerDownOutside}
         onEscapeKeyDown={() => {
@@ -198,8 +198,9 @@ export function FilePreview({ open, onOpenChange, source }: FilePreviewProps) {
           handleClose();
         }}
         aria-describedby="file-preview-description"
+        style={{ zIndex: 9999 }}
       >
-        <DialogHeader>
+        <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle id="file-preview-title">
             {getDialogTitle()}
           </DialogTitle>
@@ -209,7 +210,7 @@ export function FilePreview({ open, onOpenChange, source }: FilePreviewProps) {
         </DialogHeader>
 
         <div 
-          className="flex-1 overflow-hidden min-h-0 flex flex-col"
+          className="flex-1 overflow-hidden min-h-0 flex flex-col px-6"
           role="region"
           aria-label="File preview content"
           style={{ minHeight: '400px' }}
@@ -218,7 +219,7 @@ export function FilePreview({ open, onOpenChange, source }: FilePreviewProps) {
         </div>
 
         {/* Footer Actions */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center pt-4 border-t shrink-0 gap-2 sm:gap-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center pt-4 pb-6 px-6 border-t shrink-0 gap-2 sm:gap-0">
           <div className="text-xs sm:text-sm text-muted-foreground flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 sm:flex-1">
             {fileInfo.fileSize && (
               <span>Size: {formatFileSize(fileInfo.fileSize)}</span>

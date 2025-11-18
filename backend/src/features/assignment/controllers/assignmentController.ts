@@ -527,6 +527,22 @@ export const createAssignment = async (
       updatedAt: row.updatedAt
     }));
 
+    // Send LINE notifications to club members
+    try {
+      const { notifyClubMembersForAssignment } = await import('../../../services/lineBotService');
+      await notifyClubMembersForAssignment(clubId, {
+        id: assignmentId,
+        title: rows[0].title,
+        description: rows[0].description,
+        maxScore: rows[0].maxScore,
+        availableDate: rows[0].availableDate,
+        dueDate: rows[0].dueDate,
+      });
+    } catch (error) {
+      // Log error but don't fail the request
+      console.error('Error sending LINE notifications for assignment:', error);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Assignment created successfully',

@@ -12,6 +12,8 @@ import checkinRouter from './features/checkin/routes/checkin';
 import clubRouter from './features/club/routes/club';
 import eventRouter from './features/event/routes/event';
 import assignmentRouter from './features/assignment/routes/assignment';
+import reportRouter from './features/report/routes/report';
+import documentRouter from './features/document/routes/document';
 import lineRouter from './features/line/routes/line';
 import { initializeSocketIO } from './websocket/socketServer';
 import path from 'path';
@@ -99,6 +101,8 @@ app.use('/api/checkin', checkinRouter);
 app.use('/api/clubs', assignmentRouter); // Must be before clubRouter to match /clubs/:clubId/assignments
 app.use('/api/clubs', clubRouter);
 app.use('/api/events', eventRouter);
+app.use('/api/reports', reportRouter);
+app.use('/api/documents', documentRouter);
 app.use('/api/line', lineRouter);
 
 // Serve React app static files in production
@@ -121,6 +125,8 @@ if (isDevelopment) {
         clubs: '/api/clubs',
         events: '/api/events',
         assignments: '/api/clubs/:clubId/assignments',
+        reports: '/api/reports',
+        documents: '/api/documents',
         line: '/api/line/webhook',
       },
     });
@@ -169,6 +175,24 @@ const startServer = async () => {
     // Initialize WebSocket server
     initializeSocketIO(httpServer);
     console.log('✅ WebSocket server initialized');
+
+    // Initialize event reminder scheduler
+    // Check for events every minute
+    const { checkAndSendEventReminders } = await import('./services/eventReminderService');
+    
+    // Run immediately on startup (in case server was down)
+    checkAndSendEventReminders().catch(err => {
+      console.error('Error in initial reminder check:', err);
+    });
+    
+    // Then run every minute
+    setInterval(() => {
+      checkAndSendEventReminders().catch(err => {
+        console.error('Error in scheduled reminder check:', err);
+      });
+    }, 60 * 1000); // Every 60 seconds (1 minute)
+    
+    console.log('✅ Event reminder scheduler initialized (checks every 1 minute)');
 
     httpServer.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);

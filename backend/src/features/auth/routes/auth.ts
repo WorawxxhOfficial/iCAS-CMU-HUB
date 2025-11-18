@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { signup, login, verify, logout, refresh, getMe, requestOTP } from '../controllers/authController';
+import { signup, login, verify, logout, refresh, getMe, requestOTP, updateProfile, changePassword, deleteAccount } from '../controllers/authController';
 import { authenticate } from '../middleware/authMiddleware';
 
 const router = Router();
@@ -14,6 +14,9 @@ router.post('/refresh', refresh);
 
 // Protected routes
 router.get('/me', authenticate, getMe);
+router.put('/profile', authenticate, updateProfile);
+router.put('/password', authenticate, changePassword);
+router.delete('/account', authenticate, deleteAccount);
 
 export default router;
 

@@ -38,11 +38,13 @@ import { Separator } from "./ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { Sheet, SheetContent } from "./ui/sheet";
 import { useIsMobile } from "./ui/use-mobile";
+import { ProfileSettingsDialog } from "./ProfileSettingsDialog";
 import type { User } from "../App";
 
 interface AppSidebarProps {
   user: User;
   onLogout: () => void;
+  onUserUpdate?: (user: User) => void;
 }
 
 // Helper function to get full name
@@ -110,6 +112,18 @@ export const getMenuItemsForRole = (role: string) => {
         title: "Dashboard",
         icon: LayoutDashboard,
       },
+      {
+        id: "check-in",
+        path: "/check-in",
+        title: "Check In",
+        icon: QrCode,
+      },
+      {
+        id: "feedback",
+        path: "/feedback",
+        title: "Feedback",
+        icon: MessageSquare,
+      },
     ];
   }
 
@@ -151,7 +165,7 @@ export const getMenuItemsForRole = (role: string) => {
   return commonItems;
 };
 
-export function AppSidebar({ user, onLogout }: AppSidebarProps) {
+export function AppSidebar({ user, onLogout, onUserUpdate }: AppSidebarProps) {
   const isMobile = useIsMobile();
   const { openMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
@@ -385,6 +399,7 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
                       </p>
                     )}
                   </div>
+                  <ProfileSettingsDialog user={user} onUserUpdate={onUserUpdate} />
                 </div>
                 <Separator />
                 <Button
@@ -557,6 +572,7 @@ export function AppSidebar({ user, onLogout }: AppSidebarProps) {
                     </p>
                   )}
                 </div>
+                <ProfileSettingsDialog user={user} onUserUpdate={onUserUpdate} />
               </div>
               <Separator />
               <Button

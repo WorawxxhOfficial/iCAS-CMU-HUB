@@ -100,9 +100,9 @@ export function ClubCalendarView() {
       }
 
       // Filter events: show events created by members of this club
-        const clubEvents = allEvents.filter((event) => {
-        return memberUserIds.has(event.createdBy);
-        });
+        const clubEvents = Array.isArray(allEvents) 
+          ? allEvents.filter((event) => event && memberUserIds.has(event.createdBy))
+          : [];
         
         setEvents(clubEvents);
 
@@ -111,15 +111,17 @@ export function ClubCalendarView() {
         const allStats = await eventApi.getEventStats();
         // Calculate stats for club events only
         const clubStats: EventStats = {
-          eventsThisMonth: clubEvents.filter(e => {
+          eventsThisMonth: Array.isArray(clubEvents) ? clubEvents.filter(e => {
+            if (!e || !e.date) return false;
             const eventDate = new Date(e.date);
             const now = new Date();
             return eventDate.getMonth() === now.getMonth() && 
                    eventDate.getFullYear() === now.getFullYear();
-          }).length,
+          }).length : 0,
           daysUntilNextEvent: (() => {
+            if (!Array.isArray(clubEvents)) return null;
             const upcoming = clubEvents
-              .filter(e => new Date(e.date) >= new Date())
+              .filter(e => e && e.date && new Date(e.date) >= new Date())
               .sort((a, b) => a.date.getTime() - b.date.getTime());
             if (upcoming.length === 0) return null;
             const nextEvent = upcoming[0];
@@ -131,8 +133,8 @@ export function ClubCalendarView() {
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             return diffDays;
           })(),
-          averageAttendance: clubEvents.length > 0
-            ? Math.round(clubEvents.reduce((sum, e) => sum + (e.attendees || 0), 0) / clubEvents.length)
+          averageAttendance: Array.isArray(clubEvents) && clubEvents.length > 0
+            ? Math.round(clubEvents.filter(e => e).reduce((sum, e) => sum + (e.attendees || 0), 0) / clubEvents.length)
             : 0,
         };
         setStats(clubStats);
@@ -186,27 +188,28 @@ export function ClubCalendarView() {
   };
 
   // Filter events for selected date
-  const selectedDateEvents = events.filter((event) => {
-    if (!selectedDate) return false;
+  const selectedDateEvents = Array.isArray(events) ? events.filter((event) => {
+    if (!event || !selectedDate) return false;
     const eventDate = new Date(event.date);
     return (
       eventDate.getDate() === selectedDate.getDate() &&
       eventDate.getMonth() === selectedDate.getMonth() &&
       eventDate.getFullYear() === selectedDate.getFullYear()
     );
-  });
+  }) : [];
 
   // Filter upcoming events only
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const upcomingEvents = events
+  const upcomingEvents = Array.isArray(events) ? events
     .filter((event) => {
+      if (!event || !event.date) return false;
       const eventDate = new Date(event.date);
       eventDate.setHours(0, 0, 0, 0);
       return eventDate >= today;
     })
     .sort((a, b) => a.date.getTime() - b.date.getTime())
-    .slice(0, 5);
+    .slice(0, 5) : [];
 
   // Check if event is past
   const isPastEvent = (event: Event): boolean => {
@@ -244,6 +247,7 @@ export function ClubCalendarView() {
         location: formData.location,
         description: formData.description || undefined,
         reminderEnabled: formData.reminderEnabled,
+        clubId: clubId || undefined, // Send clubId if available
       });
 
       toast.success("สร้างกิจกรรมสำเร็จแล้ว!");

@@ -25,6 +25,7 @@ export interface CreateEventRequest {
   location: string;
   description?: string;
   reminderEnabled?: boolean;
+  clubId?: number; // Optional: if not provided, will use user's primary club
 }
 
 export interface UpdateEventRequest {

@@ -40,5 +40,22 @@ export const authApi = {
     const response = await api.post<RefreshResponse>('/auth/refresh', {});
     return response.data;
   },
+
+  updateProfile: async (data: { firstName: string; lastName: string; phoneNumber?: string }): Promise<VerifyResponse> => {
+    const response = await api.put<VerifyResponse>('/auth/profile', data);
+    return response.data;
+  },
+
+  changePassword: async (data: { oldPassword: string; newPassword: string; confirmPassword: string }): Promise<{ success: boolean; message: string }> => {
+    const response = await api.put<{ success: boolean; message: string }>('/auth/password', data);
+    return response.data;
+  },
+
+  deleteAccount: async (password: string): Promise<{ success: boolean; message: string }> => {
+    const response = await api.delete<{ success: boolean; message: string }>('/auth/account', {
+      data: { password },
+    });
+    return response.data;
+  },
 };
 

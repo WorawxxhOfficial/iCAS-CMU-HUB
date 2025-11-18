@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -21,32 +21,15 @@ import {
   User,
   FileText,
   Send,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { User } from "../App";
+import { reportApi } from "../features/report/api/reportApi";
+import type { Report, ReportType, ReportStatus } from "../features/report/types/report";
 
 interface ReportInboxViewProps {
   user: User;
-}
-
-type ReportType = "feedback" | "issue" | "suggestion" | "complaint" | "question" | "appreciation";
-type ReportStatus = "new" | "in-review" | "resolved";
-
-interface Report {
-  id: string;
-  type: ReportType;
-  subject: string;
-  message: string;
-  sender: {
-    name: string;
-    email: string;
-    club?: string;
-  };
-  date: string;
-  status: ReportStatus;
-  assignedTo?: string;
-  response?: string;
-  responseDate?: string;
 }
 
 export function ReportInboxView({ user }: ReportInboxViewProps) {
@@ -57,81 +40,30 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
   const [responseText, setResponseText] = useState("");
   const [assignedReviewer, setAssignedReviewer] = useState("");
   const [isResponseDialogOpen, setIsResponseDialogOpen] = useState(false);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [reports, setReports] = useState<Report[]>([
-    {
-      id: "RPT-001",
-      type: "suggestion",
-      subject: "Request for More Microphones",
-      message: "ขอเสนอให้ซื้อไมโครโฟนเพิ่มเติม เพราะตอนนี้ไม่พอสำหรับการซ้อมของสมาชิกทุกคน",
-      sender: {
-        name: "นภา สว่างใจ",
-        email: "napa@cmu.ac.th",
-        club: "ชมรมดนตรีสากล",
-      },
-      date: "2025-11-06T10:30:00",
-      status: "in-review",
-      assignedTo: "Super Admin",
-    },
-    {
-      id: "RPT-002",
-      type: "complaint",
-      subject: "Practice Room Too Noisy",
-      message: "ห้องซ้อมมีเสียงรบกวนจากห้องข้างๆมากเกินไป ทำให้ซ้อมได้ไม่เต็มที่",
-      sender: {
-        name: "พิมพ์ใจ ดีงาม",
-        email: "phimjai@cmu.ac.th",
-        club: "ชมรมดนตรีสากล",
-      },
-      date: "2025-11-04T14:20:00",
-      status: "new",
-    },
-    {
-      id: "RPT-003",
-      type: "appreciation",
-      subject: "Great Workshop Last Week",
-      message: "ขอบคุณสำหรับเวิร์คช็อปที่จัดเมื่อสัปดาห์ที่แล้ว ได้ความรู้เยอะมากครับ",
-      sender: {
-        name: "ธนพล แข็งแรง",
-        email: "thanapol@cmu.ac.th",
-        club: "ชมรมหุ่นยนต์",
-      },
-      date: "2025-11-05T09:15:00",
-      status: "resolved",
-      assignedTo: "Super Admin",
-      response: "ขอบคุณสำหรับกำลังใจครับ จะพยายามจัดกิจกรรมดีๆแบบนี้ต่อไป",
-      responseDate: "2025-11-05T15:30:00",
-    },
-    {
-      id: "RPT-004",
-      type: "question",
-      subject: "Upcoming Concert Date Confirmation",
-      message: "อยากขอยืนยันวันที่จัดคอนเสิร์ตหน่อยครับ เพราะไม่แน่ใจว่าวันที่ 15 หรือ 16",
-      sender: {
-        name: "วิชัย สุขใจ",
-        email: "wichai@cmu.ac.th",
-        club: "ชมรมภาพถ่าย",
-      },
-      date: "2025-11-03T11:00:00",
-      status: "resolved",
-      assignedTo: "Super Admin",
-      response: "คอนเสิร์ตจะจัดในวันที่ 15 พฤศจิกายน เวลา 19:00 น. ครับ",
-      responseDate: "2025-11-03T16:45:00",
-    },
-    {
-      id: "RPT-005",
-      type: "issue",
-      subject: "Request Approval Needed",
-      message: "ต้องการขออนุมัติสำหรับกิจกรรมพิเศษในเดือนหน้า",
-      sender: {
-        name: "สมหญิง หัวหน้า",
-        email: "somying@cmu.ac.th",
-        club: "ชมรมดนตรีสากล",
-      },
-      date: "2025-11-07T08:00:00",
-      status: "new",
-    },
-  ]);
+  // Fetch reports from API
+  useEffect(() => {
+    const fetchReports = async () => {
+      try {
+        setIsLoading(true);
+        const filters: { type?: string; status?: string } = {};
+        if (filterType !== "all") filters.type = filterType;
+        if (filterStatus !== "all") filters.status = filterStatus;
+        
+        const data = await reportApi.getReports(filters);
+        setReports(data);
+      } catch (error: any) {
+        console.error('Error fetching reports:', error);
+        toast.error('ไม่สามารถโหลดรายงานได้ กรุณาลองอีกครั้ง');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReports();
+  }, [filterType, filterStatus]);
 
   const availableReviewers = [
     "Super Admin",
@@ -143,11 +75,9 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
   const filteredReports = reports.filter((report) => {
     const matchesSearch =
       report.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      report.sender.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      report.id.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === "all" || report.status === filterStatus;
-    const matchesType = filterType === "all" || report.type === filterType;
-    return matchesSearch && matchesStatus && matchesType;
+      (report.sender?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      `RPT-${String(report.id).padStart(3, '0')}`.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
   });
 
   const getTypeIcon = (type: ReportType) => {
@@ -215,57 +145,68 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
     }
   };
 
-  const handleAssignReviewer = () => {
+  const handleAssignReviewer = async () => {
     if (!selectedReport || !assignedReviewer) {
       toast.error("กรุณาเลือกผู้ตรวจสอบ");
       return;
     }
 
-    setReports((prev) =>
-      prev.map((r) =>
-        r.id === selectedReport.id
-          ? { ...r, status: "in-review" as const, assignedTo: assignedReviewer }
-          : r
-      )
-    );
-    toast.success(`มอบหมายรายงานให้ ${assignedReviewer} แล้ว`);
-    setAssignedReviewer("");
+    try {
+      const updatedReport = await reportApi.updateReportStatus(selectedReport.id, {
+        status: "in-review",
+        assignedTo: assignedReviewer,
+      });
+      setReports((prev) =>
+        prev.map((r) => (r.id === selectedReport.id ? updatedReport : r))
+      );
+      setSelectedReport(updatedReport);
+      toast.success(`มอบหมายรายงานให้ ${assignedReviewer} แล้ว`);
+      setAssignedReviewer("");
+    } catch (error: any) {
+      console.error('Error assigning reviewer:', error);
+      toast.error('ไม่สามารถมอบหมายผู้ตรวจสอบได้ กรุณาลองอีกครั้ง');
+    }
   };
 
-  const handleMarkResolved = () => {
+  const handleMarkResolved = async () => {
     if (!selectedReport) return;
 
-    setReports((prev) =>
-      prev.map((r) =>
-        r.id === selectedReport.id
-          ? { ...r, status: "resolved" as const }
-          : r
-      )
-    );
-    toast.success("ทำเครื่องหมายรายงานว่าแก้ไขแล้ว");
+    try {
+      const updatedReport = await reportApi.updateReportStatus(selectedReport.id, {
+        status: "resolved",
+      });
+      setReports((prev) =>
+        prev.map((r) => (r.id === selectedReport.id ? updatedReport : r))
+      );
+      setSelectedReport(updatedReport);
+      toast.success("ทำเครื่องหมายรายงานว่าแก้ไขแล้ว");
+    } catch (error: any) {
+      console.error('Error marking resolved:', error);
+      toast.error('ไม่สามารถอัปเดตสถานะได้ กรุณาลองอีกครั้ง');
+    }
   };
 
-  const handleSendResponse = () => {
+  const handleSendResponse = async () => {
     if (!selectedReport || !responseText.trim()) {
       toast.error("กรุณากรอกคำตอบ");
       return;
     }
 
-    setReports((prev) =>
-      prev.map((r) =>
-        r.id === selectedReport.id
-          ? {
-              ...r,
-              status: "resolved" as const,
-              response: responseText,
-              responseDate: new Date().toISOString(),
-            }
-          : r
-      )
-    );
-    toast.success("ส่งคำตอบสำเร็จแล้ว");
-    setResponseText("");
-    setSelectedReport(null);
+    try {
+      const updatedReport = await reportApi.updateReportResponse(selectedReport.id, {
+        response: responseText,
+      });
+      setReports((prev) =>
+        prev.map((r) => (r.id === selectedReport.id ? updatedReport : r))
+      );
+      setSelectedReport(updatedReport);
+      toast.success("ส่งคำตอบสำเร็จแล้ว");
+      setResponseText("");
+      setIsResponseDialogOpen(false);
+    } catch (error: any) {
+      console.error('Error sending response:', error);
+      toast.error('ไม่สามารถส่งคำตอบได้ กรุณาลองอีกครั้ง');
+    }
   };
 
   const handleExportCSV = () => {
@@ -274,10 +215,10 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
   };
 
   const stats = {
-    total: reports.length,
-    new: reports.filter((r) => r.status === "new").length,
-    inReview: reports.filter((r) => r.status === "in-review").length,
-    resolved: reports.filter((r) => r.status === "resolved").length,
+    total: Array.isArray(reports) ? reports.length : 0,
+    new: Array.isArray(reports) ? reports.filter((r) => r && r.status === "new").length : 0,
+    inReview: Array.isArray(reports) ? reports.filter((r) => r && r.status === "in-review").length : 0,
+    resolved: Array.isArray(reports) ? reports.filter((r) => r && r.status === "resolved").length : 0,
   };
 
   return (
@@ -388,27 +329,39 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>รหัส</TableHead>
-                    <TableHead>ประเภท</TableHead>
-                    <TableHead>หัวข้อ</TableHead>
-                    <TableHead>ผู้ส่ง</TableHead>
-                    <TableHead>สถานะ</TableHead>
-                    <TableHead>วันที่</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredReports.map((report) => (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>รหัส</TableHead>
+                      <TableHead>ประเภท</TableHead>
+                      <TableHead>หัวข้อ</TableHead>
+                      <TableHead>ผู้ส่ง</TableHead>
+                      <TableHead>สถานะ</TableHead>
+                      <TableHead>วันที่</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredReports.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                          ไม่พบรายงาน
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredReports.map((report) => (
                     <TableRow
                       key={report.id}
                       className="cursor-pointer hover:bg-slate-50"
                       onClick={() => setSelectedReport(report)}
                     >
                       <TableCell>
-                        <code className="text-xs">{report.id}</code>
+                        <code className="text-xs">RPT-{String(report.id).padStart(3, '0')}</code>
                       </TableCell>
                       <TableCell>{getTypeBadge(report.type)}</TableCell>
                       <TableCell>
@@ -425,14 +378,16 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
                       <TableCell>{getStatusBadge(report.status)}</TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground whitespace-nowrap">
-                          {new Date(report.date).toLocaleDateString("th-TH")}
+                          {new Date(report.createdAt).toLocaleDateString("th-TH")}
                         </span>
                       </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                      </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -446,8 +401,17 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="space-y-3 px-4 pb-4">
-                {filteredReports.map((report) => (
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredReports.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground px-4">
+                  ไม่พบรายงาน
+                </div>
+              ) : (
+                <div className="space-y-3 px-4 pb-4">
+                  {filteredReports.map((report) => (
                   <div
                     key={report.id}
                     className="p-3 border rounded-lg cursor-pointer hover:bg-slate-50 transition-colors w-full overflow-hidden"
@@ -455,7 +419,7 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
                   >
                     <div className="flex items-start justify-between gap-2 mb-2 min-w-0">
                       <div className="flex-1 min-w-0 pr-2">
-                        <code className="text-xs text-muted-foreground block truncate">{report.id}</code>
+                        <code className="text-xs text-muted-foreground block truncate">RPT-{String(report.id).padStart(3, '0')}</code>
                         <p className="font-medium text-sm mt-1 truncate">{report.subject}</p>
                       </div>
                       <div className="flex-shrink-0">
@@ -467,18 +431,19 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
                         {getTypeBadge(report.type)}
                       </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {new Date(report.date).toLocaleDateString("th-TH")}
+                        {new Date(report.createdAt).toLocaleDateString("th-TH")}
                       </span>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs text-muted-foreground truncate">{report.sender.name}</p>
-                      {report.sender.club && (
+                      <p className="text-xs text-muted-foreground truncate">{report.sender?.name || 'Unknown'}</p>
+                      {report.sender?.club && (
                         <p className="text-xs text-muted-foreground truncate">{report.sender.club}</p>
                       )}
                     </div>
-                  </div>
-                ))}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -493,7 +458,7 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
               <div className="space-y-4">
                 <div>
                   <Label>รหัสรายงาน</Label>
-                  <p className="text-sm font-mono">{selectedReport.id}</p>
+                  <p className="text-sm font-mono">RPT-{String(selectedReport.id).padStart(3, '0')}</p>
                 </div>
                 <div>
                   <Label>ประเภท</Label>
@@ -506,9 +471,9 @@ export function ReportInboxView({ user }: ReportInboxViewProps) {
                 <div>
                   <Label>ผู้ส่ง</Label>
                   <div className="mt-1">
-                    <p className="text-sm">{selectedReport.sender.name}</p>
-                    <p className="text-xs text-muted-foreground">{selectedReport.sender.email}</p>
-                    {selectedReport.sender.club && (
+                    <p className="text-sm">{selectedReport.sender?.name || 'Unknown'}</p>
+                    <p className="text-xs text-muted-foreground">{selectedReport.sender?.email || ''}</p>
+                    {selectedReport.sender?.club && (
                       <p className="text-xs text-muted-foreground">{selectedReport.sender.club}</p>
                     )}
                   </div>

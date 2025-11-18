@@ -154,6 +154,7 @@ function AppLayout() {
           <AppSidebar 
             user={user}
             onLogout={handleLogout}
+            onUserUpdate={setUser}
           />
         )}
         {isClubRoute && (
@@ -296,7 +297,7 @@ function AppLayout() {
               path="/check-in" 
               element={
                 <SidebarProtectedRoute path="/check-in">
-                  <ProtectedRoute allowedRoles={["member"]}>
+                  <ProtectedRoute allowedRoles={["member", "leader"]}>
                     <CheckInView user={user} />
                   </ProtectedRoute>
                 </SidebarProtectedRoute>

@@ -20,6 +20,7 @@ interface CheckInSession {
   expires_at: Date;
   created_by: number;
   is_active: boolean;
+  regenerate_on_checkin?: number | boolean;
 }
 
 /**
@@ -73,12 +74,15 @@ export const startCheckInSession = async (
       token: crypto.createHash('sha256').update(`${eventId}-${sessionId}-${process.env.JWT_SECRET || 'secret'}`).digest('hex').substring(0, 16),
     });
 
+    // Get regenerate_on_checkin option from request body (default: true for security)
+    const regenerateOnCheckin = req.body.regenerateOnCheckin !== false; // Default to true
+
     // Create new session
     const [result] = await pool.execute<ResultSetHeader>(
       `INSERT INTO check_in_sessions 
-       (event_id, passcode, qr_code_data, expires_at, created_by, is_active) 
-       VALUES (?, ?, ?, ?, ?, 1)`,
-      [eventId, passcode, qrCodeData, expiresAt, userId]
+       (event_id, passcode, qr_code_data, expires_at, created_by, is_active, regenerate_on_checkin) 
+       VALUES (?, ?, ?, ?, ?, 1, ?)`,
+      [eventId, passcode, qrCodeData, expiresAt, userId, regenerateOnCheckin ? 1 : 0]
     );
 
     // Emit WebSocket event
@@ -96,6 +100,7 @@ export const startCheckInSession = async (
         passcode,
         qrCodeData,
         expiresAt: expiresAt.toISOString(),
+        regenerateOnCheckin: regenerateOnCheckin,
       },
     });
   } catch (error) {
@@ -175,6 +180,33 @@ export const checkInViaQR = async (
 
     const actualEventId = session.event_id;
 
+    // Get event info to check club membership
+    const [eventRows] = await pool.execute<RowDataPacket[]>(
+      'SELECT club_id FROM events WHERE id = ?',
+      [actualEventId]
+    );
+
+    if (eventRows.length === 0) {
+      const error: ApiError = new Error('Event not found');
+      error.statusCode = 404;
+      return next(error);
+    }
+
+    const clubId = eventRows[0].club_id;
+
+    // Check if user is a member of the club that organized this event
+    const [membershipRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id FROM club_memberships 
+       WHERE user_id = ? AND club_id = ? AND status = 'approved'`,
+      [userId, clubId]
+    );
+
+    if (membershipRows.length === 0) {
+      const error: ApiError = new Error('You must be a member of this club to check in');
+      error.statusCode = 403;
+      return next(error);
+    }
+
     // Check if already checked in
     const [existingRows] = await pool.execute<RowDataPacket[]>(
       'SELECT id FROM check_ins WHERE event_id = ? AND user_id = ?',
@@ -193,6 +225,32 @@ export const checkInViaQR = async (
       [actualEventId, userId, 'qr']
     );
 
+    // Check if we should regenerate QR code and passcode after check-in
+    const shouldRegenerate = session.regenerate_on_checkin === 1 || session.regenerate_on_checkin === true;
+
+    let newPasscode = null;
+    let newQrCodeData = null;
+
+    if (shouldRegenerate) {
+      // Generate new passcode and QR code to prevent sharing
+      newPasscode = generatePasscode();
+      const newSessionId = crypto.randomBytes(16).toString('hex');
+      newQrCodeData = JSON.stringify({
+        eventId: actualEventId,
+        sessionId: newSessionId,
+        timestamp: Date.now(),
+        token: crypto.createHash('sha256').update(`${actualEventId}-${newSessionId}-${process.env.JWT_SECRET || 'secret'}`).digest('hex').substring(0, 16),
+      });
+
+      // Update session with new passcode and QR code
+      await pool.execute(
+        `UPDATE check_in_sessions 
+         SET passcode = ?, qr_code_data = ? 
+         WHERE event_id = ? AND is_active = 1`,
+        [newPasscode, newQrCodeData, actualEventId]
+      );
+    }
+
     // Get user info for WebSocket event
     const [userRows] = await pool.execute<RowDataPacket[]>(
       'SELECT first_name, last_name FROM users WHERE id = ?',
@@ -201,8 +259,9 @@ export const checkInViaQR = async (
 
     const user = userRows[0];
 
-    // Emit WebSocket event
+    // Emit WebSocket events
     if (io) {
+      // Emit check-in success
       io.to(`event-${actualEventId}`).emit('check-in-success', {
         eventId: actualEventId,
         userId,
@@ -211,6 +270,15 @@ export const checkInViaQR = async (
         method: 'qr',
         checkInTime: new Date().toISOString(),
       });
+
+      // Emit updated session if QR/passcode was regenerated
+      if (shouldRegenerate && newPasscode && newQrCodeData) {
+        io.to(`event-${actualEventId}`).emit('check-in-session-updated', {
+          eventId: actualEventId,
+          passcode: newPasscode,
+          qrCodeData: newQrCodeData,
+        });
+      }
     }
 
     res.json({
@@ -275,6 +343,33 @@ export const checkInViaPasscode = async (
     const session = sessionRows[0] as CheckInSession;
     const actualEventId = session.event_id;
 
+    // Get event info to check club membership
+    const [eventRows] = await pool.execute<RowDataPacket[]>(
+      'SELECT club_id FROM events WHERE id = ?',
+      [actualEventId]
+    );
+
+    if (eventRows.length === 0) {
+      const error: ApiError = new Error('Event not found');
+      error.statusCode = 404;
+      return next(error);
+    }
+
+    const clubId = eventRows[0].club_id;
+
+    // Check if user is a member of the club that organized this event
+    const [membershipRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id FROM club_memberships 
+       WHERE user_id = ? AND club_id = ? AND status = 'approved'`,
+      [userId, clubId]
+    );
+
+    if (membershipRows.length === 0) {
+      const error: ApiError = new Error('You must be a member of this club to check in');
+      error.statusCode = 403;
+      return next(error);
+    }
+
     // Check if already checked in
     const [existingRows] = await pool.execute<RowDataPacket[]>(
       'SELECT id FROM check_ins WHERE event_id = ? AND user_id = ?',
@@ -293,6 +388,32 @@ export const checkInViaPasscode = async (
       [actualEventId, userId, 'passcode']
     );
 
+    // Check if we should regenerate QR code and passcode after check-in
+    const shouldRegenerate = session.regenerate_on_checkin === 1 || session.regenerate_on_checkin === true;
+
+    let newPasscode = null;
+    let newQrCodeData = null;
+
+    if (shouldRegenerate) {
+      // Generate new passcode and QR code to prevent sharing
+      newPasscode = generatePasscode();
+      const newSessionId = crypto.randomBytes(16).toString('hex');
+      newQrCodeData = JSON.stringify({
+        eventId: actualEventId,
+        sessionId: newSessionId,
+        timestamp: Date.now(),
+        token: crypto.createHash('sha256').update(`${actualEventId}-${newSessionId}-${process.env.JWT_SECRET || 'secret'}`).digest('hex').substring(0, 16),
+      });
+
+      // Update session with new passcode and QR code
+      await pool.execute(
+        `UPDATE check_in_sessions 
+         SET passcode = ?, qr_code_data = ? 
+         WHERE event_id = ? AND is_active = 1`,
+        [newPasscode, newQrCodeData, actualEventId]
+      );
+    }
+
     // Get user info for WebSocket event
     const [userRows] = await pool.execute<RowDataPacket[]>(
       'SELECT first_name, last_name FROM users WHERE id = ?',
@@ -301,8 +422,9 @@ export const checkInViaPasscode = async (
 
     const user = userRows[0];
 
-    // Emit WebSocket event
+    // Emit WebSocket events
     if (io) {
+      // Emit check-in success
       io.to(`event-${actualEventId}`).emit('check-in-success', {
         eventId: actualEventId,
         userId,
@@ -311,6 +433,15 @@ export const checkInViaPasscode = async (
         method: 'passcode',
         checkInTime: new Date().toISOString(),
       });
+
+      // Emit updated session if QR/passcode was regenerated
+      if (shouldRegenerate && newPasscode && newQrCodeData) {
+        io.to(`event-${actualEventId}`).emit('check-in-session-updated', {
+          eventId: actualEventId,
+          passcode: newPasscode,
+          qrCodeData: newQrCodeData,
+        });
+      }
     }
 
     res.json({
@@ -345,7 +476,8 @@ export const getCheckInSession = async (
         passcode,
         qr_code_data as qrCodeData,
         expires_at as expiresAt,
-        is_active as isActive
+        is_active as isActive,
+        regenerate_on_checkin as regenerateOnCheckin
        FROM check_in_sessions 
        WHERE event_id = ? AND is_active = 1 AND expires_at > NOW()
        ORDER BY created_at DESC
@@ -369,6 +501,7 @@ export const getCheckInSession = async (
         qrCodeData: session.qrCodeData,
         expiresAt: session.expiresAt,
         isActive: session.isActive === 1,
+        regenerateOnCheckin: session.regenerateOnCheckin === 1 || session.regenerateOnCheckin === true,
       },
     });
   } catch (error) {

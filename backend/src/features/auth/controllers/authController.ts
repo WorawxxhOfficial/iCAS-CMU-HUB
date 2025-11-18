@@ -540,6 +540,275 @@ export const getMe = async (
   }
 };
 
+// Update user profile (name, phone number - email cannot be changed)
+export const updateProfile = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user) {
+      const error: ApiError = new Error('Unauthorized');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const { firstName, lastName, phoneNumber } = req.body;
+    const userId = req.user.userId;
+
+    // Validate required fields
+    if (!firstName || !lastName) {
+      const error: ApiError = new Error('First name and last name are required');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Validate Thai-only for first name (no spaces)
+    if (!validateThaiOnlyNoSpaces(firstName)) {
+      const error: ApiError = new Error('First name must contain only Thai characters without spaces');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Validate Thai-only for last name (no spaces)
+    if (!validateThaiOnlyNoSpaces(lastName)) {
+      const error: ApiError = new Error('Last name must contain only Thai characters without spaces');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Validate phone number if provided
+    if (phoneNumber && !validatePhoneNumber(phoneNumber)) {
+      const error: ApiError = new Error('Phone number must be in format 0XX-XXX-XXXX');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Update user profile
+    const [result] = await pool.execute(
+      'UPDATE users SET first_name = ?, last_name = ?, phone_number = ? WHERE id = ?',
+      [firstName.trim(), lastName.trim(), phoneNumber || null, userId]
+    ) as any;
+
+    if (result.affectedRows === 0) {
+      const error: ApiError = new Error('User not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Get updated user
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      'SELECT * FROM users WHERE id = ?',
+      [userId]
+    ) as [DatabaseUser[], any];
+
+    const dbUser = rows[0];
+
+    // Get user's club memberships
+    let memberships: any[] = [];
+    try {
+      const [membershipRows] = await pool.execute<RowDataPacket[]>(
+        `SELECT cm.id, cm.club_id as clubId, cm.status, cm.role, cm.request_date as requestDate,
+                cm.approved_date as approvedDate, c.name as clubName
+         FROM club_memberships cm
+         JOIN clubs c ON cm.club_id = c.id
+         WHERE cm.user_id = ?
+         ORDER BY cm.created_at DESC`,
+        [userId]
+      ) as [RowDataPacket[], any];
+
+      memberships = membershipRows.map((row: any) => ({
+        id: row.id,
+        clubId: row.clubId,
+        clubName: row.clubName,
+        status: row.status,
+        role: row.role,
+        requestDate: row.requestDate ? row.requestDate.toISOString() : undefined,
+        approvedDate: row.approvedDate ? row.approvedDate.toISOString() : undefined,
+      }));
+    } catch (error: any) {
+      // If club_memberships table doesn't exist, just use empty array
+      memberships = [];
+    }
+
+    const user: User = {
+      id: dbUser.id,
+      email: dbUser.email,
+      firstName: dbUser.first_name,
+      lastName: dbUser.last_name,
+      phoneNumber: dbUser.phone_number || undefined,
+      major: dbUser.major,
+      role: dbUser.role,
+      clubId: dbUser.club_id || undefined,
+      clubName: dbUser.club_name || undefined,
+      avatar: dbUser.avatar || undefined,
+      createdAt: dbUser.created_at,
+      updatedAt: dbUser.updated_at,
+    };
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phoneNumber: user.phoneNumber,
+        major: user.major,
+        role: user.role,
+        clubId: user.clubId,
+        clubName: user.clubName,
+        avatar: user.avatar,
+        memberships,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Change password (requires old password)
+export const changePassword = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user) {
+      const error: ApiError = new Error('Unauthorized');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const { oldPassword, newPassword, confirmPassword } = req.body;
+    const userId = req.user.userId;
+
+    // Validate required fields
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      const error: ApiError = new Error('Old password, new password, and confirmation are required');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Validate new password
+    if (newPassword.length < 6) {
+      const error: ApiError = new Error('New password must be at least 6 characters long');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Validate password confirmation
+    if (newPassword !== confirmPassword) {
+      const error: ApiError = new Error('New passwords do not match');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Get user from database
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      'SELECT * FROM users WHERE id = ?',
+      [userId]
+    ) as [DatabaseUser[], any];
+
+    if (rows.length === 0) {
+      const error: ApiError = new Error('User not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const dbUser = rows[0];
+
+    // Verify old password
+    const isOldPasswordValid = await bcrypt.compare(oldPassword, dbUser.password);
+    if (!isOldPasswordValid) {
+      const error: ApiError = new Error('Old password is incorrect');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password
+    await pool.execute(
+      'UPDATE users SET password = ? WHERE id = ?',
+      [hashedPassword, userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Delete user account
+export const deleteAccount = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user) {
+      const error: ApiError = new Error('Unauthorized');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const { password } = req.body;
+    const userId = req.user.userId;
+
+    // Validate password
+    if (!password) {
+      const error: ApiError = new Error('Password is required to delete account');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Get user from database
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      'SELECT * FROM users WHERE id = ?',
+      [userId]
+    ) as [DatabaseUser[], any];
+
+    if (rows.length === 0) {
+      const error: ApiError = new Error('User not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const dbUser = rows[0];
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, dbUser.password);
+    if (!isPasswordValid) {
+      const error: ApiError = new Error('Password is incorrect');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    // Delete user account (CASCADE will handle related records)
+    await pool.execute(
+      'DELETE FROM users WHERE id = ?',
+      [userId]
+    );
+
+    // Clear auth cookies
+    clearAuthCookies(res);
+
+    res.json({
+      success: true,
+      message: 'Account deleted successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const refresh = async (
   req: Request,
   res: Response,

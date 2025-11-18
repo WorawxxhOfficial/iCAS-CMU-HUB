@@ -25,6 +25,7 @@ export function ImagePreview({ fileUrl, fileName, onFullscreen }: ImagePreviewPr
     setError(null);
     setPosition({ x: 0, y: 0 });
     setZoom(100);
+    console.log('ImagePreview: fileUrl changed to:', fileUrl);
   }, [fileUrl]);
 
   const handleLoad = useCallback(() => {
@@ -32,10 +33,16 @@ export function ImagePreview({ fileUrl, fileName, onFullscreen }: ImagePreviewPr
     setError(null);
   }, []);
 
-  const handleError = useCallback(() => {
+  const handleError = useCallback((e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     setIsLoading(false);
-    setError('Failed to load image');
-  }, []);
+    const img = e.currentTarget;
+    console.error('Image load error:', {
+      src: img.src,
+      fileName,
+      fileUrl
+    });
+    setError(`Failed to load image: ${fileName || 'Unknown'}`);
+  }, [fileName, fileUrl]);
 
   const handleZoomIn = useCallback(() => {
     setZoom(prev => Math.min(prev + 25, 300));
@@ -136,7 +143,7 @@ export function ImagePreview({ fileUrl, fileName, onFullscreen }: ImagePreviewPr
       {/* Image Container */}
       <div 
         ref={containerRef}
-        className="flex-1 overflow-hidden relative flex items-center justify-center p-4 sm:p-6"
+        className="flex-1 overflow-hidden relative flex items-center justify-center p-4 sm:p-6 bg-muted/20"
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
@@ -144,6 +151,10 @@ export function ImagePreview({ fileUrl, fileName, onFullscreen }: ImagePreviewPr
         onContextMenu={stopPropagation}
         onMouseDown={stopPropagation}
         onPointerDown={stopPropagation}
+        style={{ 
+          minHeight: '400px',
+          touchAction: 'none'
+        }}
       >
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
@@ -155,24 +166,60 @@ export function ImagePreview({ fileUrl, fileName, onFullscreen }: ImagePreviewPr
             <div className="text-sm text-destructive">{error}</div>
           </div>
         )}
-        <img
-          ref={imageRef}
-          src={fileUrl}
-          alt={fileName || 'Image preview'}
-          className={cn(
-            "max-w-full max-h-full object-contain rounded-lg border transition-transform duration-200",
-            zoom > 100 && "cursor-move"
+        <div
+          className="relative w-full h-full flex items-center justify-center"
+          style={{ minHeight: '400px' }}
+        >
+          {!error ? (
+            <img
+              ref={imageRef}
+              src={fileUrl}
+              alt={fileName || 'Image preview'}
+              className={cn(
+                "max-w-full max-h-full object-contain rounded-lg border transition-transform duration-200 select-none",
+                zoom > 100 && "cursor-move"
+              )}
+              style={{
+                transform: `scale(${zoom / 100}) translate(${position.x / (zoom / 100)}px, ${position.y / (zoom / 100)}px)`,
+                transformOrigin: 'center center',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                pointerEvents: zoom > 100 ? 'auto' : 'none',
+                maxWidth: '100%',
+                maxHeight: '100%',
+                width: 'auto',
+                height: 'auto'
+              }}
+              onLoad={handleLoad}
+              onError={handleError}
+              onMouseDown={handleMouseDown}
+              onClick={stopPropagation}
+              onContextMenu={stopPropagation}
+              draggable={false}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center p-8 text-center">
+              <div className="text-4xl mb-4">🖼️</div>
+              <p className="text-sm text-destructive mb-2">{error}</p>
+              <p className="text-xs text-muted-foreground mb-4">URL: {fileUrl}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setError(null);
+                  setIsLoading(true);
+                  // Force reload by adding timestamp
+                  const img = imageRef.current;
+                  if (img) {
+                    img.src = `${fileUrl}?t=${Date.now()}`;
+                  }
+                }}
+              >
+                Retry
+              </Button>
+            </div>
           )}
-          style={{
-            transform: `scale(${zoom / 100}) translate(${position.x / (zoom / 100)}px, ${position.y / (zoom / 100)}px)`,
-            transformOrigin: 'center center'
-          }}
-          onLoad={handleLoad}
-          onError={handleError}
-          onMouseDown={handleMouseDown}
-          onClick={stopPropagation}
-          onContextMenu={stopPropagation}
-        />
+        </div>
       </div>
     </div>
   );

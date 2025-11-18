@@ -39,11 +39,18 @@ export const createAndSendOTP = async (email: string): Promise<{ success: boolea
       [email, otp, expiresAt]
     );
 
+    // Send OTP email (or log to console if SMTP not configured)
     await sendOTPEmail(email, otp);
+
+    // Always log OTP to console for development
+    console.log('\n📧 ============================================');
+    console.log(`📧 OTP for ${email}: ${otp}`);
+    console.log(`📧 Expires at: ${expiresAt.toLocaleString('th-TH')}`);
+    console.log('📧 ============================================\n');
 
     return {
       success: true,
-      message: 'OTP ส่งไปที่อีเมลของคุณแล้ว',
+      message: 'OTP ส่งไปที่อีเมลของคุณแล้ว (ตรวจสอบ console สำหรับ OTP)',
     };
   } catch (error: any) {
     console.error('Error creating OTP:', error);

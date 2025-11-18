@@ -5,6 +5,34 @@
 
   export default defineConfig({
     plugins: [react()],
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: './src/__tests__/setup.ts',
+      css: true,
+      include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+      exclude: [
+        'node_modules/',
+        'dist/',
+        'build/',
+        'backend/',
+        '**/*.d.ts',
+        '**/*.config.*',
+        '**/mockData/**',
+      ],
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'json', 'html', 'lcov'],
+        exclude: [
+          'node_modules/',
+          'src/__tests__/',
+          '**/*.d.ts',
+          '**/*.config.*',
+          '**/mockData/**',
+          'backend/',
+        ],
+      },
+    },
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       alias: {

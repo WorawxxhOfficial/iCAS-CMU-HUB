@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -7,87 +7,40 @@ import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
-import { MessageSquare, Plus, ThumbsUp, ThumbsDown, Lightbulb, AlertCircle, Check, Settings } from "lucide-react";
+import { MessageSquare, Plus, ThumbsUp, ThumbsDown, Lightbulb, AlertCircle, Check, Settings, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { toast } from "sonner";
 import type { User } from "../App";
+import { reportApi } from "../features/report/api/reportApi";
+import type { Report } from "../features/report/types/report";
 
 interface FeedbackViewProps {
   user: User;
 }
 
-interface Feedback {
-  id: number;
-  type: "suggestion" | "complaint" | "appreciation" | "question";
-  category: string;
-  subject: string;
-  message: string;
-  submittedBy: string;
-  date: string;
-  status: "new" | "reviewed" | "resolved";
-  response?: string;
-}
-
 export function FeedbackView({ user }: FeedbackViewProps) {
   const [isNewFeedbackOpen, setIsNewFeedbackOpen] = useState(false);
-  const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
+  const [selectedFeedback, setSelectedFeedback] = useState<Report | null>(null);
+  const [feedbacks, setFeedbacks] = useState<Report[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>([
-    {
-      id: 1,
-      type: "suggestion",
-      category: "Equipment",
-      subject: "Request for More Microphones",
-      message: "ขอเสนอให้ซื้อไมโครโฟนเพิ่มเติม เพราะตอนนี้ไม่พอสำหรับการซ้อมของสมาชิกทุกคน",
-      submittedBy: "นภา สว่างใจ",
-      date: "2025-11-06",
-      status: "reviewed",
-      response: "ขอบคุณสำหรับข้อเสนอแนะ ทางชมรมจะพิจารณาในการประชุมครั้งหน้า",
-    },
-    {
-      id: 2,
-      type: "appreciation",
-      category: "Event",
-      subject: "Great Workshop Last Week",
-      message: "ขอบคุณสำหรับเวิร์คช็อปที่จัดเมื่อสัปดาห์ที่แล้ว ได้ความรู้เยอะมากครับ",
-      submittedBy: "ธนพล แข็งแรง",
-      date: "2025-11-05",
-      status: "resolved",
-      response: "ขอบคุณสำหรับกำลังใจครับ จะพยายามจัดกิจกรรมดีๆแบบนี้ต่อไป",
-    },
-    {
-      id: 3,
-      type: "complaint",
-      category: "Facility",
-      subject: "Practice Room Too Noisy",
-      message: "ห้องซ้อมมีเสียงรบกวนจากห้องข้างๆมากเกินไป ทำให้ซ้อมได้ไม่เต็มที่",
-      submittedBy: "พิมพ์ใจ ดีงาม",
-      date: "2025-11-04",
-      status: "new",
-    },
-    {
-      id: 4,
-      type: "question",
-      category: "Schedule",
-      subject: "Upcoming Concert Date Confirmation",
-      message: "อยากขอยืนยันวันที่จัดคอนเสิร์ตหน่อยครับ เพราะไม่แน่ใจว่าวันที่ 15 หรือ 16",
-      submittedBy: "วิชัย สุขใจ",
-      date: "2025-11-03",
-      status: "resolved",
-      response: "คอนเสิร์ตจะจัดในวันที่ 15 พฤศจิกายน เวลา 19:00 น. ครับ",
-    },
-    {
-      id: 5,
-      type: "suggestion",
-      category: "Activity",
-      subject: "Collaboration with Other Clubs",
-      message: "เสนอให้มีการทำกิจกรรมร่วมกับชมรมอื่นๆ เพื่อเพิ่มความหลากหลาย",
-      submittedBy: "ศิริพร รุ่งเรือง",
-      date: "2025-11-01",
-      status: "reviewed",
-      response: "ความคิดเห็นที่ดีมาก ทางชมรมกำลังติดต่อกับชมรมศิลปะอยู่ค่ะ",
-    },
-  ]);
+  // Fetch feedbacks (reports with type='feedback') from API
+  useEffect(() => {
+    const fetchFeedbacks = async () => {
+      try {
+        setIsLoading(true);
+        const data = await reportApi.getReports({ type: 'feedback' });
+        setFeedbacks(data);
+      } catch (error: any) {
+        console.error('Error fetching feedbacks:', error);
+        toast.error('ไม่สามารถโหลดข้อมูล feedback ได้ กรุณาลองอีกครั้ง');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFeedbacks();
+  }, []);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -161,8 +114,9 @@ export function FeedbackView({ user }: FeedbackViewProps) {
     }
   };
 
-  const handleSubmitFeedback = (e: React.FormEvent) => {
+  const handleSubmitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
+    // This will be implemented when we have the form data
     toast.success("ส่งข้อเสนอแนะสำเร็จแล้ว! หัวหน้าชมรมจะตรวจสอบในเร็วๆ นี้");
     setIsNewFeedbackOpen(false);
   };
@@ -170,7 +124,7 @@ export function FeedbackView({ user }: FeedbackViewProps) {
   const stats = {
     total: feedbacks.length,
     new: feedbacks.filter(f => f.status === "new").length,
-    reviewed: feedbacks.filter(f => f.status === "reviewed").length,
+    reviewed: feedbacks.filter(f => f.status === "in-review").length,
     resolved: feedbacks.filter(f => f.status === "resolved").length,
   };
 
@@ -308,16 +262,29 @@ export function FeedbackView({ user }: FeedbackViewProps) {
 
       {/* Feedback List */}
       <div className="grid gap-4">
-        {feedbacks
-          .filter((feedback) => {
-            // Members can only see "new" status feedback
-            if (user.role === "member") {
-              return feedback.status === "new";
-            }
-            // Leaders and admins can see all feedback
-            return true;
-          })
-          .map((feedback) => (
+        {isLoading ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+            </CardContent>
+          </Card>
+        ) : feedbacks.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              ไม่พบข้อเสนอแนะ
+            </CardContent>
+          </Card>
+        ) : (
+          feedbacks
+            .filter((feedback) => {
+              // Members can only see "new" status feedback
+              if (user.role === "member") {
+                return feedback.status === "new";
+              }
+              // Leaders and admins can see all feedback
+              return true;
+            })
+            .map((feedback) => (
           <Card
             key={feedback.id}
             className="cursor-pointer hover:shadow-md transition-shadow"
@@ -328,12 +295,11 @@ export function FeedbackView({ user }: FeedbackViewProps) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
                     {getTypeBadge(feedback.type)}
-                    <Badge variant="outline">{feedback.category}</Badge>
                     {getStatusBadge(feedback.status)}
                   </div>
                   <CardTitle className="text-base mb-1">{feedback.subject}</CardTitle>
                   <CardDescription>
-                    โดย {feedback.submittedBy} • {new Date(feedback.date).toLocaleDateString('th-TH')}
+                    โดย {feedback.sender?.name || 'ไม่ระบุชื่อ'} • {new Date(feedback.createdAt).toLocaleDateString('th-TH')}
                   </CardDescription>
                 </div>
                 {/* Status Change Dropdown - Only for leaders */}
@@ -406,7 +372,8 @@ export function FeedbackView({ user }: FeedbackViewProps) {
               )}
             </CardContent>
           </Card>
-        ))}
+            ))
+        )}
       </div>
 
       {/* Feedback Detail Dialog */}
@@ -417,18 +384,20 @@ export function FeedbackView({ user }: FeedbackViewProps) {
               <DialogHeader>
                 <DialogTitle>{selectedFeedback.subject}</DialogTitle>
                 <DialogDescription>
-                  ส่งเมื่อ {new Date(selectedFeedback.date).toLocaleDateString('th-TH')}
+                  ส่งเมื่อ {new Date(selectedFeedback.createdAt).toLocaleDateString('th-TH')}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="flex gap-2">
                   {getTypeBadge(selectedFeedback.type)}
-                  <Badge variant="outline">{selectedFeedback.category}</Badge>
                   {getStatusBadge(selectedFeedback.status)}
                 </div>
                 <div>
                   <Label>จาก</Label>
-                  <p className="mt-1">{selectedFeedback.submittedBy}</p>
+                  <p className="mt-1">{selectedFeedback.sender?.name || 'ไม่ระบุชื่อ'}</p>
+                  {selectedFeedback.sender?.email && (
+                    <p className="text-xs text-muted-foreground mt-1">{selectedFeedback.sender.email}</p>
+                  )}
                 </div>
                 <div>
                   <Label>ข้อความ</Label>
