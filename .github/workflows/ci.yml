@@ -59,10 +59,10 @@ jobs:
           SMTP_HOST: smtp.gmail.com
           SMTP_PORT: 587
           SMTP_USER: ${{ secrets.SMTP_USER || 'test@example.com' }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS || 'test_smtp_password' }}
           # LINE Bot credentials for testing
-          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
-          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN || 'test_line_token' }}
+          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET || 'test_line_secret' }}
         run: npm run test:ci
       
       - name: Upload coverage to Codecov
