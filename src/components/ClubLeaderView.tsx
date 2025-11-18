@@ -291,7 +291,7 @@ export function ClubLeaderView({ user }: ClubLeaderViewProps) {
               <label className="text-sm font-medium">เลือกชมรมที่ต้องการจัดการ</label>
               <Select
                 value={selectedClubId?.toString() || ""}
-                onValueChange={(value) => setSelectedClubId(parseInt(value))}
+                onValueChange={(value: string) => setSelectedClubId(parseInt(value))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="เลือกชมรม" />

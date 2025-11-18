@@ -204,7 +204,7 @@ export function CreateClubsView({ user }: CreateClubsViewProps) {
                   <Label htmlFor="club-category">หมวดหมู่ *</Label>
                   <Select
                     value={newClubForm.category}
-                    onValueChange={(value) => setNewClubForm((prev) => ({ ...prev, category: value }))}
+                    onValueChange={(value: string) => setNewClubForm((prev) => ({ ...prev, category: value }))}
                     required
                   >
                     <SelectTrigger id="club-category">

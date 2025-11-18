@@ -489,7 +489,7 @@ export function AssignmentCenterView({ user }: AssignmentCenterViewProps) {
                       <Checkbox
                         id={`club-${club}`}
                         checked={newAssignmentForm.targetClubs.includes(club)}
-                        onCheckedChange={(checked) => {
+                        onCheckedChange={(checked: boolean) => {
                           if (checked) {
                             setNewAssignmentForm((prev) => ({
                               ...prev,

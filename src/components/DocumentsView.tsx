@@ -465,7 +465,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
             สร้างและส่งเอกสารไปยังผู้รับพร้อมการติดตามและการยืนยันการส่ง
           </p>
         </div>
-        <Dialog open={isNewDocumentOpen} onOpenChange={(open) => {
+        <Dialog open={isNewDocumentOpen} onOpenChange={(open: boolean) => {
           setIsNewDocumentOpen(open);
           if (!open) {
             resetNewDocumentForm();
@@ -605,7 +605,7 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
               />
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
-              <Select value={filterStatus} onValueChange={(value: DocumentStatus | "all") => setFilterStatus(value)}>
+              <Select value={filterStatus} onValueChange={(value: DocStatus | "all") => setFilterStatus(value)}>
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="สถานะทั้งหมด" />
                 </SelectTrigger>
@@ -696,10 +696,10 @@ export function BudgetManagementView({ user }: BudgetManagementViewProps) {
                               <Settings className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" side="bottom" className="z-[9999] min-w-[150px] bg-white border shadow-lg" onCloseAutoFocus={(e) => e.preventDefault()}>
+                          <DropdownMenuContent align="end" side="bottom" className="z-[9999] min-w-[150px] bg-white border shadow-lg" onCloseAutoFocus={(e: Event) => e.preventDefault()}>
                             {doc.status === "Draft" && (
                               <DropdownMenuItem
-                                onSelect={(e) => {
+                                onSelect={(e: Event) => {
                                   e.preventDefault();
                                   handleSendDocument(doc.id);
                                 }}
