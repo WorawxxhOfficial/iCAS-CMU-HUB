@@ -13,7 +13,7 @@ A comprehensive club management system built with React, TypeScript, and Node.js
 ### Docker Setup (Recommended)
 
 The easiest way to run the entire application is using Docker Compose, which sets up all services automatically:
-
+        
 ```bash
 # Start all services (database, backend, frontend)
 docker-compose up -d
