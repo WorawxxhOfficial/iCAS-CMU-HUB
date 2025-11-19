@@ -9,6 +9,7 @@ import healthRouter from './routes/health';
 import authRouter from './features/auth/routes/auth';
 import checkinRouter from './features/checkin/routes/checkin';
 import clubRouter from './features/club/routes/club';
+import chatRouter from './features/club/routes/chat';
 import eventRouter from './features/event/routes/event';
 import assignmentRouter from './features/assignment/routes/assignment';
 import documentRouter from './features/smart-document/routes/document';
@@ -80,6 +81,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/checkin', checkinRouter);
 app.use('/api/clubs', assignmentRouter); // Must be before clubRouter to match /clubs/:clubId/assignments
 app.use('/api/clubs', clubRouter);
+app.use('/api/clubs', chatRouter); // Chat routes nested under clubs
 app.use('/api/clubs', documentRouter); // Must be after clubRouter to match /clubs/:clubId/documents
 app.use('/api/events', eventRouter);
 

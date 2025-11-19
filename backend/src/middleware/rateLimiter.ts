@@ -58,6 +58,16 @@ export const sessionEndLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Chat message limiter (prevents spam)
+export const chatMessageLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 messages per minute per user
+  message: 'Too many messages. Please wait a moment before sending another message.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+});
+
 // Rate limit error handler
 export const rateLimitHandler = (req: Request, res: Response) => {
   res.status(429).json({

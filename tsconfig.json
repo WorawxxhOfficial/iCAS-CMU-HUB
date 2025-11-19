@@ -15,12 +15,15 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "src/vite-env.d.ts"],
+  "include": ["src", "src/**/*", "src/vite-env.d.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
 

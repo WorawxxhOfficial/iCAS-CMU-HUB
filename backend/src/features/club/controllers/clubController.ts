@@ -579,6 +579,14 @@ export const updateMembershipStatus = async (
         membership: updatedMembership,
         status,
       });
+      
+      // If approved, notify user they can now access club chat
+      if (status === 'approved') {
+        io.to(`user-${membership.user_id}`).emit('club-chat-access-granted', {
+          clubId,
+          clubName: membership.clubName,
+        });
+      }
     }
 
     res.json({
