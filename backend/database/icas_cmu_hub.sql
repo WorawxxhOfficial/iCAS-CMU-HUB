@@ -202,13 +202,13 @@ DROP TABLE IF EXISTS `check_in_sessions`;
 CREATE TABLE `check_in_sessions` (
   `id` int(11) NOT NULL,
   `event_id` int(11) NOT NULL,
-  `passcode` varchar(10) NOT NULL,
+  `passcode` varchar(6) NOT NULL,
   `qr_code_data` text NOT NULL,
-  `expires_at` timestamp NOT NULL,
+  `expires_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `created_by` int(11) NOT NULL,
-  `is_active` tinyint(1) NOT NULL DEFAULT 1,
-  `regenerate_on_checkin` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -223,7 +223,8 @@ CREATE TABLE `check_ins` (
   `event_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
   `check_in_method` enum('qr','passcode') NOT NULL,
-  `check_in_time` timestamp NOT NULL DEFAULT current_timestamp()
+  `check_in_time` timestamp NOT NULL DEFAULT current_timestamp(),
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -374,11 +375,11 @@ ALTER TABLE `check_ins`
 --
 ALTER TABLE `club_memberships`
   ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_user_club` (`user_id`,`club_id`),
   ADD KEY `idx_user_id` (`user_id`),
   ADD KEY `idx_club_id` (`club_id`),
   ADD KEY `idx_status` (`status`),
-  ADD KEY `idx_role` (`role`),
-  ADD UNIQUE KEY `unique_user_club` (`user_id`, `club_id`);
+  ADD KEY `idx_approved_by` (`approved_by`);
 
 --
 -- Indexes for table `reports`
@@ -544,7 +545,7 @@ CREATE TABLE `assignment_submissions` (
   `file_name` varchar(255) DEFAULT NULL,
   `file_size` int(11) DEFAULT NULL,
   `file_mime_type` varchar(100) DEFAULT NULL,
-  `score` decimal(10,2) DEFAULT NULL,
+  `score` int(11) DEFAULT NULL,
   `comment` text DEFAULT NULL,
   `graded_by` int(11) DEFAULT NULL,
   `graded_at` timestamp NULL DEFAULT NULL,
@@ -563,8 +564,8 @@ DROP TABLE IF EXISTS `assignment_attachments`;
 CREATE TABLE `assignment_attachments` (
   `id` int(11) NOT NULL,
   `assignment_id` int(11) NOT NULL,
-  `file_path` varchar(500) NOT NULL,
-  `file_name` varchar(255) NOT NULL,
+  `file_path` varchar(500) DEFAULT NULL,
+  `file_name` varchar(255) DEFAULT NULL,
   `file_mime_type` varchar(100) DEFAULT NULL,
   `file_size` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -600,6 +601,7 @@ ALTER TABLE `club_assignments`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_club_id` (`club_id`),
   ADD KEY `idx_created_by` (`created_by`),
+  ADD KEY `idx_available_date` (`available_date`),
   ADD KEY `idx_due_date` (`due_date`);
 
 --
@@ -607,10 +609,11 @@ ALTER TABLE `club_assignments`
 --
 ALTER TABLE `assignment_submissions`
   ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_assignment_user` (`assignment_id`,`user_id`),
   ADD KEY `idx_assignment_id` (`assignment_id`),
   ADD KEY `idx_user_id` (`user_id`),
   ADD KEY `idx_graded_by` (`graded_by`),
-  ADD UNIQUE KEY `unique_assignment_user` (`assignment_id`, `user_id`);
+  ADD KEY `idx_submitted_at` (`submitted_at`);
 
 --
 -- Indexes for table `assignment_attachments`
@@ -626,7 +629,39 @@ ALTER TABLE `assignment_comments`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_assignment_id` (`assignment_id`),
   ADD KEY `idx_user_id` (`user_id`),
-  ADD KEY `idx_parent_comment_id` (`parent_comment_id`);
+  ADD KEY `idx_parent_comment_id` (`parent_comment_id`),
+  ADD KEY `idx_created_at` (`created_at`);
+
+--
+-- Indexes for table `document_assignments`
+--
+ALTER TABLE `document_assignments`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_document_user` (`document_id`,`user_id`),
+  ADD KEY `idx_document_id` (`document_id`),
+  ADD KEY `idx_user_id` (`user_id`),
+  ADD KEY `idx_status` (`status`),
+  ADD KEY `idx_submission_status` (`submission_status`);
+
+--
+-- Indexes for table `document_templates`
+--
+ALTER TABLE `document_templates`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_club_id` (`club_id`),
+  ADD KEY `idx_category` (`category`),
+  ADD KEY `idx_is_public` (`is_public`),
+  ADD KEY `idx_created_by` (`created_by`);
+
+--
+-- Indexes for table `smart_documents`
+--
+ALTER TABLE `smart_documents`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_club_id` (`club_id`),
+  ADD KEY `idx_created_by` (`created_by`),
+  ADD KEY `idx_status` (`status`),
+  ADD KEY `idx_due_date` (`due_date`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -654,6 +689,24 @@ ALTER TABLE `assignment_attachments`
 -- AUTO_INCREMENT for table `assignment_comments`
 --
 ALTER TABLE `assignment_comments`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `document_assignments`
+--
+ALTER TABLE `document_assignments`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `document_templates`
+--
+ALTER TABLE `document_templates`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `smart_documents`
+--
+ALTER TABLE `smart_documents`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
@@ -688,6 +741,27 @@ ALTER TABLE `assignment_comments`
   ADD CONSTRAINT `assignment_comments_ibfk_1` FOREIGN KEY (`assignment_id`) REFERENCES `club_assignments` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `assignment_comments_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `assignment_comments_ibfk_3` FOREIGN KEY (`parent_comment_id`) REFERENCES `assignment_comments` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `document_assignments`
+--
+ALTER TABLE `document_assignments`
+  ADD CONSTRAINT `document_assignments_ibfk_1` FOREIGN KEY (`document_id`) REFERENCES `smart_documents` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `document_assignments_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `document_templates`
+--
+ALTER TABLE `document_templates`
+  ADD CONSTRAINT `document_templates_ibfk_1` FOREIGN KEY (`club_id`) REFERENCES `clubs` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `document_templates_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`);
+
+--
+-- Constraints for table `smart_documents`
+--
+ALTER TABLE `smart_documents`
+  ADD CONSTRAINT `smart_documents_ibfk_1` FOREIGN KEY (`club_id`) REFERENCES `clubs` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `smart_documents_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 -- --------------------------------------------------------
 
