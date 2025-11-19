@@ -36,9 +36,10 @@ import { AssignmentProgressCard } from "./AssignmentProgressCard";
 import { Sparkles } from "lucide-react";
 
 // Unified type for assignments and smart documents
+// Use Omit to remove the existing 'type' property from SmartDocument to avoid conflict
 export type UnifiedAssignment = 
-  | (Assignment & { type: 'assignment' })
-  | (SmartDocument & { type: 'smartDocument' });
+  | (Assignment & { itemType: 'assignment' })
+  | (Omit<SmartDocument, 'type'> & { itemType: 'smartDocument'; documentType: SmartDocument['type'] });
 
 export interface CategorizedUnifiedAssignments {
   current: UnifiedAssignment[];
@@ -48,32 +49,34 @@ export interface CategorizedUnifiedAssignments {
 }
 
 // Type guard functions
-function isSmartDocument(item: UnifiedAssignment): item is SmartDocument & { type: 'smartDocument' } {
-  return (item as any).type === 'smartDocument';
+function isSmartDocument(item: UnifiedAssignment): item is Omit<SmartDocument, 'type'> & { itemType: 'smartDocument'; documentType: SmartDocument['type'] } {
+  return item.itemType === 'smartDocument';
 }
 
-function isAssignment(item: UnifiedAssignment): item is Assignment & { type: 'assignment' } {
-  return (item as any).type === 'assignment';
+function isAssignment(item: UnifiedAssignment): item is Assignment & { itemType: 'assignment' } {
+  return item.itemType === 'assignment';
 }
 
 // Helper functions to normalize data
 const normalizeAssignment = (assignment: Assignment): UnifiedAssignment => ({
   ...assignment,
-  type: 'assignment' as const,
+  itemType: 'assignment' as const,
 });
 
 const normalizeSmartDocument = (document: SmartDocument): UnifiedAssignment => {
+  const { type: documentType, ...rest } = document;
   return {
-    ...document,
-    type: 'smartDocument' as const,
-  } as unknown as UnifiedAssignment;
+    ...rest,
+    itemType: 'smartDocument' as const,
+    documentType,
+  };
 };
 
 // Helper to get common properties
 const getUnifiedTitle = (item: UnifiedAssignment): string => item.title;
 const getUnifiedDescription = (item: UnifiedAssignment): string | undefined => item.description;
 const getUnifiedDueDate = (item: UnifiedAssignment): string => {
-  if (item.type === 'assignment') {
+  if (item.itemType === 'assignment') {
     return item.dueDate;
   } else {
     return item.dueDate;
@@ -205,8 +208,8 @@ export function ClubAssignmentsView() {
         ];
         
         allAssignments.forEach((item) => {
-          if (item.type === 'assignment') {
-            const assignment = item as Assignment & { type: 'assignment' };
+          if (item.itemType === 'assignment') {
+            const assignment = item as Assignment & { itemType: 'assignment' };
             // Parse dates using UTC to match backend format
             let availableDate: Date;
             let dueDate: Date;
@@ -236,9 +239,9 @@ export function ClubAssignmentsView() {
             } else {
               recategorized.upcoming.push(item);
             }
-          } else if (item.type === 'smartDocument') {
+          } else if (item.itemType === 'smartDocument') {
             // Smart document - use existing categorization
-            const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+            const smartDoc = item as Omit<SmartDocument, 'type'> & { itemType: 'smartDocument'; documentType: SmartDocument['type'] };
             const dueDate = new Date(smartDoc.dueDate);
             if (dueDate < now) {
               if (smartDoc.isOverdue && smartDoc.status !== 'Completed') {
@@ -373,12 +376,12 @@ export function ClubAssignmentsView() {
       const filterByGraded = (list: UnifiedAssignment[]) => {
         return list.filter((item) => {
           // Only apply graded filter to assignments, not smart documents
-          if (item.type === 'smartDocument') {
+          if (item.itemType === 'smartDocument') {
             return true; // Include all smart documents
           }
           
-          if (item.type === 'assignment') {
-            const assignment = item as Assignment & { type: 'assignment' };
+          if (item.itemType === 'assignment') {
+            const assignment = item as Assignment & { itemType: 'assignment' };
             const hasSubmission = assignment.userSubmission !== null && assignment.userSubmission !== undefined;
             const isGraded = hasSubmission && assignment.userSubmission?.gradedAt !== null;
             
@@ -421,12 +424,12 @@ export function ClubAssignmentsView() {
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           case 'submissionCount':
             // Only assignments have submissionCount
-            const aCount = (a.type === 'assignment' && a.submissionCount) ? a.submissionCount : 0;
-            const bCount = (b.type === 'assignment' && b.submissionCount) ? b.submissionCount : 0;
+            const aCount = (a.itemType === 'assignment' && a.submissionCount) ? a.submissionCount : 0;
+            const bCount = (b.itemType === 'assignment' && b.submissionCount) ? b.submissionCount : 0;
             return aCount - bCount;
           case 'submissionCountDesc':
-            const aCountDesc = (a.type === 'assignment' && a.submissionCount) ? a.submissionCount : 0;
-            const bCountDesc = (b.type === 'assignment' && b.submissionCount) ? b.submissionCount : 0;
+            const aCountDesc = (a.itemType === 'assignment' && a.submissionCount) ? a.submissionCount : 0;
+            const bCountDesc = (b.itemType === 'assignment' && b.submissionCount) ? b.submissionCount : 0;
             return bCountDesc - aCountDesc;
           default:
             return 0;
@@ -543,7 +546,7 @@ export function ClubAssignmentsView() {
       ...assignments.upcoming,
       ...assignments.overdue,
       ...assignments.past
-    ].find(a => a.id === assignmentId && a.type === 'assignment');
+    ].find(a => a.id === assignmentId && a.itemType === 'assignment');
 
     if (assignment) {
       setAssignmentToDelete({ id: assignmentId, title: assignment.title });
@@ -711,11 +714,16 @@ export function ClubAssignmentsView() {
   const renderAssignmentCard = (item: UnifiedAssignment) => {
     // Get status based on type with proper type guards
     let status: { label: string; color: string };
-    if (item.type === 'smartDocument') {
-      const smartDoc = item as SmartDocument & { type: 'smartDocument' };
-      status = getSmartDocumentStatus(smartDoc as unknown as SmartDocument);
-    } else if (item.type === 'assignment') {
-      const assignment = item as Assignment & { type: 'assignment' };
+    if (item.itemType === 'smartDocument') {
+      const smartDoc = item as Omit<SmartDocument, 'type'> & { itemType: 'smartDocument'; documentType: SmartDocument['type'] };
+      // Reconstruct SmartDocument for getSmartDocumentStatus
+      const fullSmartDoc: SmartDocument = {
+        ...smartDoc,
+        type: smartDoc.documentType,
+      };
+      status = getSmartDocumentStatus(fullSmartDoc);
+    } else if (item.itemType === 'assignment') {
+      const assignment = item as Assignment & { itemType: 'assignment' };
       status = getAssignmentStatus(assignment);
     } else {
       status = { label: 'Unknown', color: 'bg-gray-100 text-gray-700' };
@@ -723,12 +731,12 @@ export function ClubAssignmentsView() {
     
     // Get submission info with proper type guards
     let hasSubmission: boolean;
-    if (item.type === 'smartDocument') {
-      const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+    if (item.itemType === 'smartDocument') {
+      const smartDoc = item as Omit<SmartDocument, 'type'> & { itemType: 'smartDocument'; documentType: SmartDocument['type'] };
       hasSubmission = smartDoc.assignedMembers?.[0]?.submissionStatus !== undefined 
         && smartDoc.assignedMembers[0].submissionStatus !== 'Not Submitted';
-    } else if (item.type === 'assignment') {
-      const assignment = item as Assignment & { type: 'assignment' };
+    } else if (item.itemType === 'assignment') {
+      const assignment = item as Assignment & { itemType: 'assignment' };
       hasSubmission = assignment.userSubmission !== null && assignment.userSubmission !== undefined;
     } else {
       hasSubmission = false;
@@ -736,11 +744,11 @@ export function ClubAssignmentsView() {
 
     // Format due date
     let dueDateStr: string;
-    if (item.type === 'smartDocument') {
-      const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+    if (item.itemType === 'smartDocument') {
+      const smartDoc = item as Omit<SmartDocument, 'type'> & { itemType: 'smartDocument'; documentType: SmartDocument['type'] };
       dueDateStr = new Date(smartDoc.dueDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    } else if (item.type === 'assignment') {
-      const assignment = item as Assignment & { type: 'assignment' };
+    } else if (item.itemType === 'assignment') {
+      const assignment = item as Assignment & { itemType: 'assignment' };
       dueDateStr = formatDate(assignment.dueDate);
     } else {
       dueDateStr = '';
@@ -748,16 +756,16 @@ export function ClubAssignmentsView() {
 
     // Navigation handler
     const handleClick = () => {
-      if (item.type === 'smartDocument') {
-        const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+      if (item.itemType === 'smartDocument') {
+        const smartDoc = item as Omit<SmartDocument, 'type'> & { itemType: 'smartDocument'; documentType: SmartDocument['type'] };
         navigate(`/club/${clubId}/smartdoc/${smartDoc.id}`);
-      } else if (item.type === 'assignment') {
-        const assignment = item as Assignment & { type: 'assignment' };
+      } else if (item.itemType === 'assignment') {
+        const assignment = item as Assignment & { itemType: 'assignment' };
         navigate(`/club/${clubId}/assignment/${assignment.id}`);
       }
     };
     
-    const isSmartDoc = item.type === 'smartDocument';
+    const isSmartDoc = item.itemType === 'smartDocument';
 
     // Visual styling for smart documents
     const cardClassName = isSmartDoc
@@ -825,8 +833,8 @@ export function ClubAssignmentsView() {
             </div>
           )}
 
-          {item.type === 'smartDocument' && hasSubmission && (() => {
-            const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+          {item.itemType === 'smartDocument' && hasSubmission && (() => {
+            const smartDoc = item as Omit<SmartDocument, 'type'> & { itemType: 'smartDocument'; documentType: SmartDocument['type'] };
             return smartDoc.assignedMembers?.[0]?.fileName && (
               <div className="flex items-center gap-2 text-sm">
                 <FileText className="h-4 w-4" />
@@ -835,8 +843,8 @@ export function ClubAssignmentsView() {
             );
           })()}
 
-          {item.type === 'smartDocument' && (() => {
-            const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+          {item.itemType === 'smartDocument' && (() => {
+            const smartDoc = item as Omit<SmartDocument, 'type'> & { itemType: 'smartDocument'; documentType: SmartDocument['type'] };
             return smartDoc.assignedMembers?.[0]?.adminComment && (
               <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
                 <p className="text-sm font-medium text-blue-900 dark:text-blue-100">ความคิดเห็น:</p>
@@ -845,8 +853,8 @@ export function ClubAssignmentsView() {
             );
           })()}
 
-          {item.type === 'assignment' && hasSubmission && (() => {
-            const assignment = item as Assignment & { type: 'assignment' };
+          {item.itemType === 'assignment' && hasSubmission && (() => {
+            const assignment = item as Assignment & { itemType: 'assignment' };
             return assignment.userSubmission?.comment && (
               <div className="mt-2 p-3 bg-muted rounded-md">
                 <p className="text-sm font-medium">Feedback:</p>
@@ -1024,8 +1032,13 @@ export function ClubAssignmentsView() {
             ];
             
             const totalAssignments = allAssignments.length;
-            const assignmentsWithSubmissions = allAssignments.filter(a => (a.submissionCount || 0) > 0);
-            const totalSubmissions = allAssignments.reduce((sum, a) => sum + (a.submissionCount || 0), 0);
+            const assignmentsWithSubmissions = allAssignments.filter(a => a.itemType === 'assignment' && ((a as Assignment & { itemType: 'assignment' }).submissionCount || 0) > 0);
+            const totalSubmissions = allAssignments.reduce((sum, a) => {
+              if (a.itemType === 'assignment') {
+                return sum + ((a as Assignment & { itemType: 'assignment' }).submissionCount || 0);
+              }
+              return sum;
+            }, 0);
             
             return (
               <>
