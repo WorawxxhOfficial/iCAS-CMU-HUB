@@ -1,0 +1,29 @@
+.typingIndicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.typingSpinner {
+  height: 0.875rem;
+  width: 0.875rem;
+  animation: spin 1s linear infinite;
+}
+
+.typingText {
+  color: var(--muted-foreground);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+

@@ -1,0 +1,24 @@
+.dateHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  width: 100%;
+}
+
+.dateLine {
+  flex: 1;
+  height: 1px;
+  background-color: var(--border);
+}
+
+.dateLabel {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  padding: 0 0.5rem;
+}
+
