@@ -47,16 +47,27 @@ export interface CategorizedUnifiedAssignments {
   past: UnifiedAssignment[];
 }
 
+// Type guard functions
+function isSmartDocument(item: UnifiedAssignment): item is SmartDocument & { type: 'smartDocument' } {
+  return (item as any).type === 'smartDocument';
+}
+
+function isAssignment(item: UnifiedAssignment): item is Assignment & { type: 'assignment' } {
+  return (item as any).type === 'assignment';
+}
+
 // Helper functions to normalize data
 const normalizeAssignment = (assignment: Assignment): UnifiedAssignment => ({
   ...assignment,
   type: 'assignment' as const,
 });
 
-const normalizeSmartDocument = (document: SmartDocument): UnifiedAssignment => ({
-  ...document,
-  type: 'smartDocument' as const,
-});
+const normalizeSmartDocument = (document: SmartDocument): UnifiedAssignment => {
+  return {
+    ...document,
+    type: 'smartDocument' as const,
+  } as unknown as UnifiedAssignment;
+};
 
 // Helper to get common properties
 const getUnifiedTitle = (item: UnifiedAssignment): string => item.title;
@@ -195,26 +206,27 @@ export function ClubAssignmentsView() {
         
         allAssignments.forEach((item) => {
           if (item.type === 'assignment') {
+            const assignment = item as Assignment & { type: 'assignment' };
             // Parse dates using UTC to match backend format
             let availableDate: Date;
             let dueDate: Date;
             
-            if (item.availableDate.includes(' ')) {
-              const [datePart, timePart] = item.availableDate.split(' ');
+            if (assignment.availableDate.includes(' ')) {
+              const [datePart, timePart] = assignment.availableDate.split(' ');
               const [year, month, day] = datePart.split('-').map(Number);
               const [hours, minutes, seconds = 0] = timePart.split(':').map(Number);
               availableDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
             } else {
-              availableDate = new Date(item.availableDate);
+              availableDate = new Date(assignment.availableDate);
             }
             
-            if (item.dueDate.includes(' ')) {
-              const [datePart, timePart] = item.dueDate.split(' ');
+            if (assignment.dueDate.includes(' ')) {
+              const [datePart, timePart] = assignment.dueDate.split(' ');
               const [year, month, day] = datePart.split('-').map(Number);
               const [hours, minutes, seconds = 0] = timePart.split(':').map(Number);
               dueDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
             } else {
-              dueDate = new Date(item.dueDate);
+              dueDate = new Date(assignment.dueDate);
             }
             
             if (dueDate < now) {
@@ -224,11 +236,12 @@ export function ClubAssignmentsView() {
             } else {
               recategorized.upcoming.push(item);
             }
-          } else {
+          } else if (item.type === 'smartDocument') {
             // Smart document - use existing categorization
-            const dueDate = new Date(item.dueDate);
+            const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+            const dueDate = new Date(smartDoc.dueDate);
             if (dueDate < now) {
-              if (item.isOverdue && item.status !== 'Completed') {
+              if (smartDoc.isOverdue && smartDoc.status !== 'Completed') {
                 recategorized.overdue.push(item);
               } else {
                 recategorized.past.push(item);
@@ -320,12 +333,13 @@ export function ClubAssignmentsView() {
 
   // Get status for filtering (works with both types)
   const getUnifiedStatusForFilter = (item: UnifiedAssignment): string => {
-    if (item.type === 'smartDocument') {
+    if (isSmartDocument(item)) {
       const submissionStatus = item.assignedMembers?.[0]?.submissionStatus || 'Not Submitted';
       return submissionStatus.toLowerCase().replace(' ', '-');
-    } else {
+    } else if (isAssignment(item)) {
       return getAssignmentStatusForFilter(item);
     }
+    return 'unknown';
   };
 
   // Apply filters and sorting
@@ -363,18 +377,22 @@ export function ClubAssignmentsView() {
             return true; // Include all smart documents
           }
           
-          const hasSubmission = item.userSubmission !== null && item.userSubmission !== undefined;
-          const isGraded = hasSubmission && item.userSubmission?.gradedAt !== null;
+          if (item.type === 'assignment') {
+            const assignment = item as Assignment & { type: 'assignment' };
+            const hasSubmission = assignment.userSubmission !== null && assignment.userSubmission !== undefined;
+            const isGraded = hasSubmission && assignment.userSubmission?.gradedAt !== null;
+            
+            if (gradedFilter.includes('graded')) {
+              return isGraded;
+            }
+            if (gradedFilter.includes('ungraded')) {
+              return hasSubmission && !isGraded;
+            }
+            if (gradedFilter.includes('not-submitted')) {
+              return !hasSubmission;
+            }
+          }
           
-          if (gradedFilter.includes('graded')) {
-            return isGraded;
-          }
-          if (gradedFilter.includes('ungraded')) {
-            return hasSubmission && !isGraded;
-          }
-          if (gradedFilter.includes('not-submitted')) {
-            return !hasSubmission;
-          }
           return true;
         });
       };
@@ -440,11 +458,11 @@ export function ClubAssignmentsView() {
     e.stopPropagation(); // Prevent card click navigation
     
     // Only allow editing assignments, not smart documents
-    if (item.type === 'smartDocument') {
+    if (!isAssignment(item)) {
       return;
     }
     
-    const assignment = item;
+    const assignment = item; // Type is already narrowed by type guard
     
     // Fetch the latest assignment data to ensure we have attachment fields
     if (clubId) {
@@ -691,38 +709,58 @@ export function ClubAssignmentsView() {
   };
 
   const renderAssignmentCard = (item: UnifiedAssignment) => {
-    const isSmartDocument = item.type === 'smartDocument';
-    
     // Get status based on type with proper type guards
-    const status = isSmartDocument && item.type === 'smartDocument'
-      ? getSmartDocumentStatus(item as SmartDocument)
-      : item.type === 'assignment'
-      ? getAssignmentStatus(item as Assignment)
-      : { label: 'Unknown', color: 'bg-gray-100 text-gray-700' };
+    let status: { label: string; color: string };
+    if (item.type === 'smartDocument') {
+      const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+      status = getSmartDocumentStatus(smartDoc as unknown as SmartDocument);
+    } else if (item.type === 'assignment') {
+      const assignment = item as Assignment & { type: 'assignment' };
+      status = getAssignmentStatus(assignment);
+    } else {
+      status = { label: 'Unknown', color: 'bg-gray-100 text-gray-700' };
+    }
     
     // Get submission info with proper type guards
-    const hasSubmission = isSmartDocument && item.type === 'smartDocument'
-      ? (item.assignedMembers?.[0]?.submissionStatus && item.assignedMembers[0].submissionStatus !== 'Not Submitted')
-      : item.type === 'assignment'
-      ? (item.userSubmission !== null && item.userSubmission !== undefined)
-      : false;
+    let hasSubmission: boolean;
+    if (item.type === 'smartDocument') {
+      const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+      hasSubmission = smartDoc.assignedMembers?.[0]?.submissionStatus !== undefined 
+        && smartDoc.assignedMembers[0].submissionStatus !== 'Not Submitted';
+    } else if (item.type === 'assignment') {
+      const assignment = item as Assignment & { type: 'assignment' };
+      hasSubmission = assignment.userSubmission !== null && assignment.userSubmission !== undefined;
+    } else {
+      hasSubmission = false;
+    }
 
     // Format due date
-    const dueDateStr = isSmartDocument 
-      ? new Date(item.dueDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-      : formatDate(item.dueDate);
+    let dueDateStr: string;
+    if (item.type === 'smartDocument') {
+      const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+      dueDateStr = new Date(smartDoc.dueDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    } else if (item.type === 'assignment') {
+      const assignment = item as Assignment & { type: 'assignment' };
+      dueDateStr = formatDate(assignment.dueDate);
+    } else {
+      dueDateStr = '';
+    }
 
     // Navigation handler
     const handleClick = () => {
-      if (isSmartDocument) {
-        navigate(`/club/${clubId}/smartdoc/${item.id}`);
-      } else {
-        navigate(`/club/${clubId}/assignment/${item.id}`);
+      if (item.type === 'smartDocument') {
+        const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+        navigate(`/club/${clubId}/smartdoc/${smartDoc.id}`);
+      } else if (item.type === 'assignment') {
+        const assignment = item as Assignment & { type: 'assignment' };
+        navigate(`/club/${clubId}/assignment/${assignment.id}`);
       }
     };
+    
+    const isSmartDoc = item.type === 'smartDocument';
 
     // Visual styling for smart documents
-    const cardClassName = isSmartDocument
+    const cardClassName = isSmartDoc
       ? "hover:shadow-md transition-shadow cursor-pointer border-2 border-purple-300 bg-white dark:bg-gray-900"
       : "hover:shadow-md transition-shadow cursor-pointer";
 
@@ -735,13 +773,13 @@ export function ClubAssignmentsView() {
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0 flex items-center gap-2" style={{ display: 'flex', alignItems: 'center' }}>
-              {isSmartDocument && (
+              {isSmartDoc && (
                 <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400 flex-shrink-0" />
               )}
               <CardTitle className="text-base truncate" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
                 {item.title}
               </CardTitle>
-              {!isSmartDocument && isLeader && (
+              {!isSmartDoc && isLeader && (
                 <span className="flex-shrink-0" data-slot="card" style={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }}>
                   {item.isVisible !== false ? (
                     <Eye className="h-4 w-4 text-muted-foreground" style={{ display: 'inline-block', verticalAlign: 'middle' }} />
@@ -752,7 +790,7 @@ export function ClubAssignmentsView() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              {isSmartDocument && (
+              {isSmartDoc && (
                 <Badge variant="outline" className="text-xs border-purple-300 text-purple-700 dark:text-purple-400">
                   เอกสารอัจฉริยะ
                 </Badge>
@@ -775,7 +813,7 @@ export function ClubAssignmentsView() {
             </div>
           </div>
 
-          {!isSmartDocument && item.maxScore !== null && item.maxScore !== undefined && (
+          {isAssignment(item) && item.maxScore !== null && item.maxScore !== undefined && (
             <div className="flex items-center gap-2 text-sm">
               <FileText className="h-4 w-4" />
               <span>Max Score: {item.maxScore} points</span>
@@ -787,28 +825,37 @@ export function ClubAssignmentsView() {
             </div>
           )}
 
-          {isSmartDocument && hasSubmission && item.type === 'smartDocument' && item.assignedMembers?.[0]?.fileName && (
-            <div className="flex items-center gap-2 text-sm">
-              <FileText className="h-4 w-4" />
-              <span className="truncate">ไฟล์: {item.assignedMembers[0].fileName}</span>
-            </div>
-          )}
+          {item.type === 'smartDocument' && hasSubmission && (() => {
+            const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+            return smartDoc.assignedMembers?.[0]?.fileName && (
+              <div className="flex items-center gap-2 text-sm">
+                <FileText className="h-4 w-4" />
+                <span className="truncate">ไฟล์: {smartDoc.assignedMembers[0].fileName}</span>
+              </div>
+            );
+          })()}
 
-          {isSmartDocument && item.type === 'smartDocument' && item.assignedMembers?.[0]?.adminComment && (
-            <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">ความคิดเห็น:</p>
-              <p className="text-sm text-muted-foreground mt-1">{item.assignedMembers[0].adminComment}</p>
-            </div>
-          )}
+          {item.type === 'smartDocument' && (() => {
+            const smartDoc = item as SmartDocument & { type: 'smartDocument' };
+            return smartDoc.assignedMembers?.[0]?.adminComment && (
+              <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-100">ความคิดเห็น:</p>
+                <p className="text-sm text-muted-foreground mt-1">{smartDoc.assignedMembers[0].adminComment}</p>
+              </div>
+            );
+          })()}
 
-          {!isSmartDocument && hasSubmission && item.userSubmission?.comment && (
-            <div className="mt-2 p-3 bg-muted rounded-md">
-              <p className="text-sm font-medium">Feedback:</p>
-              <p className="text-sm text-muted-foreground mt-1">{item.userSubmission.comment}</p>
-            </div>
-          )}
+          {item.type === 'assignment' && hasSubmission && (() => {
+            const assignment = item as Assignment & { type: 'assignment' };
+            return assignment.userSubmission?.comment && (
+              <div className="mt-2 p-3 bg-muted rounded-md">
+                <p className="text-sm font-medium">Feedback:</p>
+                <p className="text-sm text-muted-foreground mt-1">{assignment.userSubmission.comment}</p>
+              </div>
+            );
+          })()}
 
-          {!isSmartDocument && isLeader && (
+          {!isSmartDoc && isLeader && (
             <div className="flex flex-row gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
               <Button
                 variant="outline"
