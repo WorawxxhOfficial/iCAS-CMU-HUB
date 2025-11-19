@@ -243,9 +243,11 @@ export function DocumentDetailView() {
   };
 
   const handleDownloadTemplate = () => {
-    if (!document.templatePath) return;
+    if (!document || !document.templatePath) return;
     const templateUrl = documentApi.getFileUrl(document.templatePath);
-    window.open(templateUrl, '_blank');
+    if (templateUrl) {
+      window.open(templateUrl, '_blank');
+    }
   };
 
   const handleDownloadFile = (filePath: string) => {
@@ -415,7 +417,7 @@ export function DocumentDetailView() {
                     const memberRole = member.role?.toLowerCase?.() || member.role || '';
                     const isMember = user?.role === 'admin' 
                       ? true // Admins can review everyone
-                      : (memberRole === 'member' || memberRole === 'staff') && memberRole !== 'leader';
+                      : (memberRole === 'member' || memberRole === 'staff' || memberRole === '');
                     
                     return (
                       <Card
@@ -579,8 +581,11 @@ export function DocumentDetailView() {
                     variant="outline"
                     size="sm"
                     onClick={() => {
+                      if (!document || !document.templatePath) return;
                       const fileUrl = documentApi.getFileUrl(document.templatePath);
-                      window.open(fileUrl, '_blank');
+                      if (fileUrl) {
+                        window.open(fileUrl, '_blank');
+                      }
                     }}
                     className="flex-1 text-xs sm:text-sm"
                   >

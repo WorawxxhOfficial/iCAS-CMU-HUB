@@ -693,15 +693,19 @@ export function ClubAssignmentsView() {
   const renderAssignmentCard = (item: UnifiedAssignment) => {
     const isSmartDocument = item.type === 'smartDocument';
     
-    // Get status based on type
-    const status = isSmartDocument 
-      ? getSmartDocumentStatus(item)
-      : getAssignmentStatus(item);
+    // Get status based on type with proper type guards
+    const status = isSmartDocument && item.type === 'smartDocument'
+      ? getSmartDocumentStatus(item as SmartDocument)
+      : item.type === 'assignment'
+      ? getAssignmentStatus(item as Assignment)
+      : { label: 'Unknown', color: 'bg-gray-100 text-gray-700' };
     
-    // Get submission info
-    const hasSubmission = isSmartDocument
+    // Get submission info with proper type guards
+    const hasSubmission = isSmartDocument && item.type === 'smartDocument'
       ? (item.assignedMembers?.[0]?.submissionStatus && item.assignedMembers[0].submissionStatus !== 'Not Submitted')
-      : (item.userSubmission !== null && item.userSubmission !== undefined);
+      : item.type === 'assignment'
+      ? (item.userSubmission !== null && item.userSubmission !== undefined)
+      : false;
 
     // Format due date
     const dueDateStr = isSmartDocument 
@@ -783,14 +787,14 @@ export function ClubAssignmentsView() {
             </div>
           )}
 
-          {isSmartDocument && hasSubmission && item.assignedMembers?.[0]?.fileName && (
+          {isSmartDocument && hasSubmission && item.type === 'smartDocument' && item.assignedMembers?.[0]?.fileName && (
             <div className="flex items-center gap-2 text-sm">
               <FileText className="h-4 w-4" />
               <span className="truncate">ไฟล์: {item.assignedMembers[0].fileName}</span>
             </div>
           )}
 
-          {isSmartDocument && item.assignedMembers?.[0]?.adminComment && (
+          {isSmartDocument && item.type === 'smartDocument' && item.assignedMembers?.[0]?.adminComment && (
             <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-md border border-blue-200 dark:border-blue-800">
               <p className="text-sm font-medium text-blue-900 dark:text-blue-100">ความคิดเห็น:</p>
               <p className="text-sm text-muted-foreground mt-1">{item.assignedMembers[0].adminComment}</p>

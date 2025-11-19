@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import pool from '../../../config/database';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { ApiError } from '../../../middleware/errorHandler';
+import { ApiError, createApiError } from '../../../middleware/errorHandler';
 import { AuthRequest } from '../../auth/middleware/authMiddleware';
 import { CreateDocumentRequest, UpdateDocumentRequest, UpdateDocumentStatusRequest, UpdateMemberSubmissionStatusRequest, ReviewSubmissionRequest, SmartDocument, DocumentAssignment, BulkUpdateStatusRequest, BulkAssignRequest, BulkDeleteRequest, BulkExportRequest } from '../types/document';
 import path from 'path';
@@ -40,9 +40,7 @@ export const getClubDocuments = async (
     }
 
     if (!isLeader && !isAdmin) {
-      const error: ApiError = new Error('Only club leaders can view documents');
-      error.statusCode = 403;
-      throw error;
+      throw createApiError('Only club leaders can view documents', 403);
     }
 
     // Get all documents for the club
@@ -155,9 +153,7 @@ export const getDocument = async (
     const userId = req.user?.userId;
 
     if (!userId) {
-      const error: ApiError = new Error('User not authenticated');
-      error.statusCode = 401;
-      throw error;
+      throw createApiError('User not authenticated', 401);
     }
 
     // Check if user is admin or leader
@@ -207,9 +203,7 @@ export const getDocument = async (
     const [rows] = await pool.execute<RowDataPacket[]>(query, [documentId, clubId]);
 
     if (rows.length === 0) {
-      const error: ApiError = new Error('Document not found');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Document not found', 404);
     }
 
     const doc = rows[0];
@@ -222,9 +216,7 @@ export const getDocument = async (
       );
 
       if (assignmentCheck.length === 0) {
-        const error: ApiError = new Error('You do not have access to this document');
-        error.statusCode = 403;
-        throw error;
+        throw createApiError('You do not have access to this document', 403);
       }
     }
 
@@ -336,9 +328,7 @@ export const getMemberAssignedDocuments = async (
     const userId = req.user?.userId;
 
     if (!userId) {
-      const error: ApiError = new Error('User not authenticated');
-      error.statusCode = 401;
-      throw error;
+      throw createApiError('User not authenticated', 401);
     }
 
     // Verify user is a member of the club and get user info
@@ -351,9 +341,7 @@ export const getMemberAssignedDocuments = async (
     );
 
     if (membershipRows.length === 0) {
-      const error: ApiError = new Error('User is not a member of this club');
-      error.statusCode = 403;
-      throw error;
+      throw createApiError('User is not a member of this club', 403);
     }
 
     const userInfo = membershipRows[0];
@@ -461,15 +449,11 @@ export const createDocument = async (
 
     // Validate required fields
     if (!title || !description || !dueDate) {
-      const error: ApiError = new Error('Title, description, and due date are required');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('Title, description, and due date are required', 400);
     }
 
     if (!assignedMemberIds || assignedMemberIds.length === 0) {
-      const error: ApiError = new Error('At least one member must be assigned');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('At least one member must be assigned', 400);
     }
 
     // Validate due date is not in the past
@@ -477,9 +461,7 @@ export const createDocument = async (
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (due < today) {
-      const error: ApiError = new Error('Due date cannot be in the past');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('Due date cannot be in the past', 400);
     }
 
     // Insert document
@@ -611,9 +593,7 @@ export const updateDocument = async (
     );
 
     if (checkRows.length === 0) {
-      const error: ApiError = new Error('Document not found');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Document not found', 404);
     }
 
     // Build update query dynamically
@@ -777,9 +757,7 @@ export const updateDocumentStatus = async (
     );
 
     if (checkRows.length === 0) {
-      const error: ApiError = new Error('Document not found');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Document not found', 404);
     }
 
     // Update status
@@ -836,9 +814,7 @@ export const deleteDocument = async (
     );
 
     if (checkRows.length === 0) {
-      const error: ApiError = new Error('Document not found');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Document not found', 404);
     }
 
     // Delete will cascade to document_assignments due to foreign key
@@ -861,12 +837,11 @@ export const updateMemberSubmissionStatus = async (
 ) => {
   try {
     const { clubId, documentId } = req.params;
-    const userId = req.user?.id;
+    const userId = req.user?.userId;
     const { userId: memberUserId, submissionStatus }: UpdateMemberSubmissionStatusRequest = req.body;
 
     if (!userId) {
-      const error = new ApiError('Unauthorized', 401);
-      throw error;
+      throw createApiError('Unauthorized', 401);
     }
 
     // Verify user is leader or admin of the club
@@ -877,8 +852,7 @@ export const updateMemberSubmissionStatus = async (
     );
 
     if (leaderRows.length === 0) {
-      const error = new ApiError('Only club leaders can update member submission status', 403);
-      throw error;
+      throw createApiError('Only club leaders can update member submission status', 403);
     }
 
     // Verify document exists and belongs to club
@@ -888,8 +862,7 @@ export const updateMemberSubmissionStatus = async (
     );
 
     if (docRows.length === 0) {
-      const error = new ApiError('Document not found', 404);
-      throw error;
+      throw createApiError('Document not found', 404);
     }
 
     // Verify assignment exists
@@ -899,8 +872,7 @@ export const updateMemberSubmissionStatus = async (
     );
 
     if (assignmentRows.length === 0) {
-      const error = new ApiError('Member assignment not found', 404);
-      throw error;
+      throw createApiError('Member assignment not found', 404);
     }
 
     // Update submission status
@@ -910,7 +882,11 @@ export const updateMemberSubmissionStatus = async (
     );
 
     // Update document status based on all submissions
-    await updateDocumentStatusBasedOnSubmissions(documentId);
+    const documentIdNum = parseInt(documentId);
+    if (isNaN(documentIdNum)) {
+      throw createApiError('Invalid document ID', 400);
+    }
+    await updateDocumentStatusBasedOnSubmissions(documentIdNum);
 
     // Fetch updated document with assignments
     const [updatedDocRows] = await pool.execute<RowDataPacket[]>(
@@ -1005,9 +981,7 @@ export const getTemplates = async (
     const { category, clubId, isPublic } = req.query;
 
     if (!userId) {
-      const error: ApiError = new Error('User not authenticated');
-      error.statusCode = 401;
-      throw error;
+      throw createApiError('User not authenticated', 401);
     }
 
     const isAdmin = req.user?.role === 'admin';
@@ -1097,9 +1071,7 @@ export const createTemplate = async (
     const file = req.file;
 
     if (!userId) {
-      const error: ApiError = new Error('User not authenticated');
-      error.statusCode = 401;
-      throw error;
+      throw createApiError('User not authenticated', 401);
     }
 
     const isAdmin = req.user?.role === 'admin';
@@ -1114,24 +1086,18 @@ export const createTemplate = async (
       const isLeader = membershipRows.length > 0 && membershipRows[0].role === 'leader';
       
       if (!isLeader) {
-        const error: ApiError = new Error('Only club leaders and admins can create templates');
-        error.statusCode = 403;
-        throw error;
+      throw createApiError('Only club leaders and admins can create templates', 403);
       }
     }
 
     if (!file) {
-      const error: ApiError = new Error('File is required');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('File is required', 400);
     }
 
     const { name, description, category = 'Other', tags, isPublic = false } = req.body;
 
     if (!name) {
-      const error: ApiError = new Error('Template name is required');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('Template name is required', 400);
     }
 
     const filePath = `uploads/templates/${file.filename}`;
@@ -1205,9 +1171,7 @@ export const updateTemplate = async (
     const { name, description, category, tags, isPublic } = req.body;
 
     if (!userId) {
-      const error: ApiError = new Error('User not authenticated');
-      error.statusCode = 401;
-      throw error;
+      throw createApiError('User not authenticated', 401);
     }
 
     // Check if template exists and user has permission
@@ -1217,9 +1181,7 @@ export const updateTemplate = async (
     );
 
     if (templateRows.length === 0) {
-      const error: ApiError = new Error('Template not found');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Template not found', 404);
     }
 
     const template = templateRows[0];
@@ -1228,9 +1190,7 @@ export const updateTemplate = async (
 
     // Only creator or admin can update
     if (!isAdmin && !isCreator) {
-      const error: ApiError = new Error('Only template creator or admin can update template');
-      error.statusCode = 403;
-      throw error;
+      throw createApiError('Only template creator or admin can update template', 403);
     }
 
     // Build update query
@@ -1259,9 +1219,7 @@ export const updateTemplate = async (
     }
 
     if (updates.length === 0) {
-      const error: ApiError = new Error('No fields to update');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('No fields to update', 400);
     }
 
     params.push(templateId);
@@ -1318,9 +1276,7 @@ export const deleteTemplate = async (
     const templateId = parseInt(req.params.templateId);
 
     if (!userId) {
-      const error: ApiError = new Error('User not authenticated');
-      error.statusCode = 401;
-      throw error;
+      throw createApiError('User not authenticated', 401);
     }
 
     // Check if template exists and user has permission
@@ -1330,9 +1286,7 @@ export const deleteTemplate = async (
     );
 
     if (templateRows.length === 0) {
-      const error: ApiError = new Error('Template not found');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Template not found', 404);
     }
 
     const template = templateRows[0];
@@ -1341,9 +1295,7 @@ export const deleteTemplate = async (
 
     // Only creator or admin can delete
     if (!isAdmin && !isCreator) {
-      const error: ApiError = new Error('Only template creator or admin can delete template');
-      error.statusCode = 403;
-      throw error;
+      throw createApiError('Only template creator or admin can delete template', 403);
     }
 
     // Delete file if exists
@@ -1376,15 +1328,11 @@ export const submitDocument = async (
     const file = req.file;
 
     if (!userId) {
-      const error: ApiError = new Error('Unauthorized');
-      error.statusCode = 401;
-      throw error;
+      throw createApiError('Unauthorized', 401);
     }
 
     if (!file) {
-      const error: ApiError = new Error('File is required');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('File is required', 400);
     }
 
     // Verify document exists and user is assigned
@@ -1394,9 +1342,7 @@ export const submitDocument = async (
     );
 
     if (docRows.length === 0) {
-      const error: ApiError = new Error('Document not found');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Document not found', 404);
     }
 
     // Verify user is assigned to this document
@@ -1406,9 +1352,7 @@ export const submitDocument = async (
     );
 
     if (assignmentRows.length === 0) {
-      const error: ApiError = new Error('You are not assigned to this document');
-      error.statusCode = 403;
-      throw error;
+      throw createApiError('You are not assigned to this document', 403);
     }
 
     const assignment = assignmentRows[0];
@@ -1587,18 +1531,14 @@ export const reviewSubmission = async (
     const { userId: memberUserId, submissionStatus, comment }: ReviewSubmissionRequest = req.body;
 
     if (!userId) {
-      const error: ApiError = new Error('Unauthorized');
-      error.statusCode = 401;
-      throw error;
+      throw createApiError('Unauthorized', 401);
     }
 
     // Only admins can review and approve submissions
     const isAdmin = req.user?.role === 'admin';
 
     if (!isAdmin) {
-      const error: ApiError = new Error('Only admins can review and approve submissions');
-      error.statusCode = 403;
-      throw error;
+      throw createApiError('Only admins can review and approve submissions', 403);
     }
 
     // Verify document exists
@@ -1608,9 +1548,7 @@ export const reviewSubmission = async (
     );
 
     if (docRows.length === 0) {
-      const error: ApiError = new Error('Document not found');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Document not found', 404);
     }
 
     // Verify assignment exists
@@ -1623,9 +1561,7 @@ export const reviewSubmission = async (
     );
 
     if (assignmentRows.length === 0) {
-      const error: ApiError = new Error('Member assignment not found');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Member assignment not found', 404);
     }
 
     // Admins can review everyone (including leaders), but this check is mainly for future use
@@ -1816,15 +1752,11 @@ export const bulkUpdateStatus = async (
     const { documentIds, status }: BulkUpdateStatusRequest = req.body;
 
     if (!documentIds || documentIds.length === 0) {
-      const error: ApiError = new Error('Document IDs are required');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('Document IDs are required', 400);
     }
 
     if (!status) {
-      const error: ApiError = new Error('Status is required');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('Status is required', 400);
     }
 
     // Verify all documents belong to the club
@@ -1835,9 +1767,7 @@ export const bulkUpdateStatus = async (
     );
 
     if (checkRows.length !== documentIds.length) {
-      const error: ApiError = new Error('Some documents not found or do not belong to this club');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Some documents not found or do not belong to this club', 404);
     }
 
     // Update status for all documents
@@ -1867,15 +1797,11 @@ export const bulkAssign = async (
     const { documentIds, memberIds }: BulkAssignRequest = req.body;
 
     if (!documentIds || documentIds.length === 0) {
-      const error: ApiError = new Error('Document IDs are required');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('Document IDs are required', 400);
     }
 
     if (!memberIds || memberIds.length === 0) {
-      const error: ApiError = new Error('Member IDs are required');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('Member IDs are required', 400);
     }
 
     // Verify all documents belong to the club
@@ -1886,9 +1812,7 @@ export const bulkAssign = async (
     );
 
     if (checkRows.length !== documentIds.length) {
-      const error: ApiError = new Error('Some documents not found or do not belong to this club');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Some documents not found or do not belong to this club', 404);
     }
 
     // Verify all members belong to the club
@@ -1899,9 +1823,7 @@ export const bulkAssign = async (
     );
 
     if (memberRows.length !== memberIds.length) {
-      const error: ApiError = new Error('Some members not found or are not approved members of this club');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Some members not found or are not approved members of this club', 404);
     }
 
     // Assign members to all documents
@@ -1940,9 +1862,7 @@ export const bulkDelete = async (
     const { documentIds }: BulkDeleteRequest = req.body;
 
     if (!documentIds || documentIds.length === 0) {
-      const error: ApiError = new Error('Document IDs are required');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('Document IDs are required', 400);
     }
 
     // Verify all documents belong to the club
@@ -1953,9 +1873,7 @@ export const bulkDelete = async (
     );
 
     if (checkRows.length !== documentIds.length) {
-      const error: ApiError = new Error('Some documents not found or do not belong to this club');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Some documents not found or do not belong to this club', 404);
     }
 
     // Get file paths for deletion
@@ -1998,9 +1916,7 @@ export const bulkExport = async (
     const { documentIds, format = 'json' }: BulkExportRequest = req.body;
 
     if (!documentIds || documentIds.length === 0) {
-      const error: ApiError = new Error('Document IDs are required');
-      error.statusCode = 400;
-      throw error;
+      throw createApiError('Document IDs are required', 400);
     }
 
     // Verify all documents belong to the club
@@ -2023,9 +1939,7 @@ export const bulkExport = async (
     );
 
     if (docRows.length !== documentIds.length) {
-      const error: ApiError = new Error('Some documents not found or do not belong to this club');
-      error.statusCode = 404;
-      throw error;
+      throw createApiError('Some documents not found or do not belong to this club', 404);
     }
 
     if (format === 'csv') {

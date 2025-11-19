@@ -547,7 +547,7 @@ export function DocumentDetailDialog({
                     const memberRole = member.role?.toLowerCase?.() || member.role || '';
                     const isMember = user?.role === 'admin' 
                       ? true // Admins can review everyone
-                      : (memberRole === 'member' || memberRole === 'staff') && memberRole !== 'leader';
+                      : (memberRole === 'member' || memberRole === 'staff' || memberRole === '');
                     
                     return (
                       <Card
